@@ -13,6 +13,7 @@ import { getOrderStatus, useOrderStatus, ORDER_HOURS_LABEL } from "../lib/orderH
 /* ------------------------------------------------------------------ */
 /*  Settings & Robust Fallback Models                                  */
 /* ------------------------------------------------------------------ */
+// Local aur Vercel dono jagah ke liye secure environment variable mapping
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const OWNER_WHATSAPP = business.contact.whatsappNumber;
 
@@ -197,6 +198,10 @@ function mentionedDishes(reply, max = 4) {
 async function fetchWithFallback(contents, cartLines) {
   let lastError = null;
   const system = buildSystemInstruction(cartLines);
+  
+  // Debugging check to ensure API key is available at runtime
+  console.log("API Key loaded check:", API_KEY ? "Yes" : "No");
+
   for (const model of MODELS) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);
