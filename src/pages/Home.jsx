@@ -127,10 +127,10 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
 function HeroVideo() {
   const [failed, setFailed] = useState(false);
   const reduce = useReducedMotion();
-  const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
+  const reduceMotion = useReducedMotion();
   
-  // Fallback to image if reduced motion, data saver or video error
-  const skip = reduce || conn?.saveData || conn?.effectiveType === '2g' || failed;
+  // Only fallback if reduced motion or explicit error occurs, keeping mobile video fully enabled
+  const skip = reduceMotion || failed;
   
   if (skip) {
     return <img src={biryani} alt="A plate of biryani served with sides" width="783" height="1020" fetchPriority="high" className="h-full w-full object-cover" />;
