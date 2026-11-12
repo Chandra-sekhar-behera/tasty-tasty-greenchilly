@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight, ArrowUpRight, MapPin, Clock, Phone, Navigation, ListChecks, UserRound, Send,
   Flame, Soup, Leaf, ChefHat, Star, UtensilsCrossed, Wallet, ChevronDown, Sparkles, Drumstick, Wheat,
-  BadgePercent, Truck, Egg, Fish, Salad,
+  BadgePercent, Truck, Egg, Fish, Salad, RotateCw, PenLine, ExternalLink,
 } from "lucide-react";
 import WhatsAppIcon from "../components/WhatsAppIcon.jsx";
 import SectionHeading from "../components/SectionHeading.jsx";
@@ -30,26 +31,43 @@ import catMutton from "../assets/Mutton Kasa.jpg";
 import catEgg from "../assets/Egg Chilli.jpg";
 import catRaitaPapad from "../assets/Fry Papad.jpg";
 
+/** Google link for reviews (button + QR). Opens the restaurant's Google panel with the "Write a review" button. */
+const REVIEW_URL = "https://www.google.com/search?q=tasty+tasty+green+chilly+haribhaina";
+
 /* ------------------------------------------------------------------ */
 /*  Slow directional entrance: slides in from left / right / up        */
 /* ------------------------------------------------------------------ */
 const EASE = [0.16, 1, 0.3, 1];
 
+/** true on phones / tablets (no mouse hover). Used to flip cards by tap and to keep animations light. */
+function useTouch() {
+  const get = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(hover: none)").matches;
+  const [v, setV] = useState(get);
+  useEffect(() => {
+    const m = window.matchMedia("(hover: none)");
+    const f = () => setV(m.matches);
+    m.addEventListener ? m.addEventListener("change", f) : m.addListener(f);
+    return () => (m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f));
+  }, []);
+  return v;
+}
+
 function Slide({ from = "left", delay = 0, duration = 1.6, distance = 140, className = "", as = "div", children, ...rest }) {
   const reduce = useReducedMotion();
+  const touch = useTouch();
   const Tag = motion[as] || motion.div;
-  const d = reduce ? 0 : distance;
-  const start = {
-    opacity: 0,
-    x: from === "left" ? -d : from === "right" ? d : 0,
-    y: from === "up" ? Math.min(d, 70) : 0,
-  };
+  // phones: short, quick slide-up instead of long sideways slides (smoother, no sideways overflow)
+  const d = reduce ? 0 : touch ? Math.min(distance, 30) : distance;
+  const start = touch
+    ? { opacity: 0, x: 0, y: d }
+    : { opacity: 0, x: from === "left" ? -d : from === "right" ? d : 0, y: from === "up" ? Math.min(d, 70) : 0 };
+  if (touch) { duration = Math.min(duration, 0.7); delay = Math.min(delay, 0.2); }
   return (
     <Tag
       className={className}
       initial={start}
       whileInView={{ opacity: 1, x: 0, y: 0 }}
-      viewport={{ once: true, margin: "-70px" }}
+      viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: reduce ? 0.01 : duration, delay, ease: EASE }}
       {...rest}
     >
@@ -67,15 +85,18 @@ const faceStyle = { backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hid
 
 function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", ...rest }) {
   const reduce = useReducedMotion();
+  const touch = useTouch();
   const [flip, setFlip] = useState(false);
   const mouse = (e, v) => { if (e.pointerType === "mouse") setFlip(v); };
+  const key = (e) => { if (e.target.matches && e.target.matches(":focus-visible")) setFlip(true); };
+  const toggle = (e) => { e.preventDefault(); e.stopPropagation(); setFlip((f) => !f); };
   return (
     <Tag
       className={className}
       style={{ perspective: 1400 }}
       onPointerEnter={(e) => mouse(e, true)}
       onPointerLeave={(e) => mouse(e, false)}
-      onFocus={() => setFlip(true)}
+      onFocus={key}
       onBlur={() => setFlip(false)}
       {...rest}
     >
@@ -83,11 +104,23 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
         className={fill ? "absolute inset-0" : "relative h-full"}
         style={{ transformStyle: "preserve-3d" }}
         animate={{ rotateY: flip ? 180 : 0 }}
-        transition={{ duration: reduce ? 0.01 : 0.85, ease: EASE }}
+        transition={{ duration: reduce ? 0.01 : touch ? 0.55 : 0.85, ease: EASE }}
       >
-        <div className={fill ? "absolute inset-0" : "h-full"} style={faceStyle}>{front}</div>
-        <div className="absolute inset-0" style={{ ...faceStyle, transform: "rotateY(180deg)" }}>{back}</div>
+        <div className={fill ? "absolute inset-0" : "h-full"} style={{ ...faceStyle, pointerEvents: flip ? "none" : "auto" }}>{front}</div>
+        <div className="absolute inset-0" style={{ ...faceStyle, transform: "rotateY(180deg)", pointerEvents: flip ? "auto" : "none" }}>{back}</div>
       </motion.div>
+      {/* phones and tablets have no mouse hover, so this small button flips the card by tap */}
+      {touch && (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-pressed={flip}
+          aria-label={flip ? "Show front of card" : "Show details"}
+          className="absolute right-3 top-3 z-20 grid h-10 w-10 touch-manipulation [-webkit-tap-highlight-color:transparent] place-items-center rounded-full border border-ivory/25 bg-ink/75 text-lime shadow-lg backdrop-blur-sm active:scale-90"
+        >
+          <RotateCw size={17} className={flip ? "-scale-x-100" : ""} />
+        </button>
+      )}
     </Tag>
   );
 }
@@ -98,8 +131,10 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
 function HeroVideo() {
   const [failed, setFailed] = useState(false);
   const reduce = useReducedMotion();
+  const touch = useTouch();
   const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
-  const skip = reduce || conn?.saveData || failed;
+  // phones show the photo (a looping video makes small devices lag); desktops get the video
+  const skip = reduce || touch || conn?.saveData || failed;
   if (skip) {
     return <img src={biryani} alt="A plate of biryani served with sides" width="783" height="1020" fetchPriority="high" className="h-full w-full object-cover" />;
   }
@@ -120,9 +155,10 @@ function HeroVideo() {
 }
 
 function RotatingBadge() {
+  const touch = useTouch();
   return (
     <div className="absolute -right-3 -top-5 z-10 h-28 w-28 sm:-right-10 sm:-top-8 sm:h-36 sm:w-36" aria-hidden="true">
-      <motion.svg viewBox="0 0 120 120" className="h-full w-full" animate={{ rotate: 360 }} transition={{ duration: 28, ease: "linear", repeat: Infinity }}>
+      <motion.svg viewBox="0 0 120 120" className="h-full w-full" animate={touch ? undefined : { rotate: 360 }} transition={{ duration: 28, ease: "linear", repeat: Infinity }}>
         <defs><path id="badge-circle" d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0" /></defs>
         <circle cx="60" cy="60" r="58" fill="#08140e" fillOpacity="0.72" stroke="#8bcb35" strokeOpacity="0.5" />
         <text fill="#b7e36b" fontSize="10.5" letterSpacing="3.2" fontWeight="600" style={{ textTransform: "uppercase" }}>
@@ -137,19 +173,21 @@ function RotatingBadge() {
 function Hero() {
   const ref = useRef(null);
   const reduce = useReducedMotion();
+  const touch = useTouch();
+  const calm = reduce || touch; // no scroll-parallax on phones
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const textY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 90]);
-  const mediaY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : -50]);
-  const fade = useTransform(scrollYProgress, [0, 0.8], [1, 0.2]);
+  const textY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : 90]);
+  const mediaY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : -50]);
+  const fade = useTransform(scrollYProgress, [0, 0.8], [1, calm ? 1 : 0.2]);
 
   return (
-    <section ref={ref} className="noise relative isolate flex min-h-[100svh] items-center overflow-hidden bg-ink" aria-labelledby="hero-title">
+    <section ref={ref} className="relative isolate flex min-h-[100svh] items-center overflow-hidden bg-ink" aria-labelledby="hero-title">
       {/* ambient background */}
-      <img src={interior} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-30 blur-[3px]" />
+      <img src={interior} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full object-cover object-center opacity-30" />
       <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-forest/50" aria-hidden="true" />
       <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/70" aria-hidden="true" />
-      <motion.div aria-hidden="true" className="pointer-events-none absolute -left-32 top-10 h-96 w-96 rounded-full bg-violet/25 blur-[120px]" animate={{ x: [0, 60, 0], y: [0, 30, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} />
-      <motion.div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-1/4 h-80 w-80 rounded-full bg-lime/15 blur-[120px]" animate={{ x: [0, -70, 0], y: [0, -30, 0] }} transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }} />
+      <div aria-hidden="true" className="pointer-events-none absolute -left-32 top-10 hidden h-96 w-96 rounded-full bg-violet/25 blur-[100px] md:block" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-1/4 hidden h-80 w-80 rounded-full bg-lime/15 blur-[100px] md:block" />
 
       <div className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-5 pb-24 pt-28 sm:px-8 lg:grid-cols-12 lg:gap-12 lg:pb-20 lg:pt-32">
         {/* LEFT: copy slides in from the left */}
@@ -194,8 +232,8 @@ function Hero() {
         <motion.div style={{ y: mediaY }} className="relative mx-auto w-full max-w-md lg:col-span-5 lg:max-w-none">
           <Slide from="right" distance={220} duration={2} delay={0.3}>
             <div className="relative mx-auto aspect-[4/5] w-[78%] sm:w-[68%] lg:w-[78%]">
-              <motion.div aria-hidden="true" className="absolute -inset-4 rounded-t-[999px] rounded-b-[2.5rem] border border-dashed border-lime/25" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} />
-              <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-3xl border border-lime/30 bg-forest shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85),0_0_80px_-20px_rgba(139,203,53,0.35)]">
+              <div aria-hidden="true" className="absolute -inset-4 rounded-t-[999px] rounded-b-[2.5rem] border border-dashed border-lime/30" />
+              <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-3xl border border-lime/30 bg-forest shadow-[0_30px_60px_-20px_rgba(0,0,0,0.8)]">
                 <HeroVideo />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent" />
                 <div className="pointer-events-none absolute inset-0 rounded-t-[999px] rounded-b-3xl ring-1 ring-inset ring-ivory/10" />
@@ -205,7 +243,7 @@ function Hero() {
 
               {/* paneer card slides from the left */}
               <Slide from="left" distance={160} duration={1.9} delay={1.2} className="absolute -left-6 bottom-12 w-40 sm:-left-14 sm:w-52">
-                <div className="drift overflow-hidden rounded-2xl border border-ivory/25 shadow-2xl">
+                <div className="overflow-hidden rounded-2xl border border-ivory/25 shadow-2xl">
                   <img src={paneer} alt="Paneer tikka served sizzling" width="800" height="457" loading="lazy" className="aspect-[4/3] w-full object-cover" />
                 </div>
               </Slide>
@@ -246,29 +284,44 @@ function Strip() {
     { t: "Kebabs", Icon: Drumstick },
     { t: "Sizzling Starters", Icon: Sparkles },
   ];
+  const [spend, per] = String(business.priceRange).split(/\s+per\s+/i);
   const facts = [
     { k: "Cuisine", v: "Indian · Chinese · Tandoor", Icon: UtensilsCrossed, from: "left" },
     { k: "Location", v: "Hari Bhaina Chhaka, Jatni", Icon: MapPin, from: "left" },
-    { k: "Google rating", v: `${business.rating.value} / 5 · ${business.rating.count} reviews`, Icon: Star, from: "right" },
-    { k: "Typical spend", v: business.priceRange, Icon: Wallet, from: "right" },
+    { k: "Google rating", big: String(business.rating.value), unit: "/ 5", note: `${business.rating.count} reviews on Google`, Icon: Star, from: "right" },
+    { k: "Typical spend", big: spend, note: per ? `per person` : "", Icon: Wallet, from: "right", accent: true },
   ];
   return (
     <section id="glance" aria-label="At a glance" className="relative overflow-x-clip border-y border-lime/15 bg-forest">
-      <div className="marquee py-5" aria-hidden="true">
+      <div className="marquee py-4 sm:py-5" aria-hidden="true">
         <div className="marquee-track">
           {[...words, ...words, ...words, ...words].map(({ t, Icon }, i) => (
-            <span key={i} className="flex items-center font-serif text-3xl italic text-ivory/80 sm:text-4xl">
-              <span className="px-8">{t}</span><Icon size={22} className="text-lime" strokeWidth={1.7} />
+            <span key={i} className="flex items-center font-serif text-2xl italic text-ivory/80 sm:text-4xl">
+              <span className="px-6 sm:px-8">{t}</span><Icon size={20} className="text-lime" strokeWidth={1.7} />
             </span>
           ))}
         </div>
       </div>
       <div className="hairline" />
-      <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-y-8 px-5 py-10 sm:px-8 lg:grid-cols-4">
-        {facts.map(({ k, v, Icon, from }, i) => (
-          <Slide key={k} from={from} distance={80} duration={1.4} delay={i * 0.12} className="group border-l border-lime/25 pl-5">
-            <dt className="eyebrow flex items-center gap-2 text-lime"><Icon size={14} /> {k}</dt>
-            <dd className="mt-2 font-serif text-xl leading-snug sm:text-2xl">{v}</dd>
+      <dl className="mx-auto grid max-w-7xl grid-cols-1 gap-3 px-5 py-8 min-[480px]:grid-cols-2 sm:gap-4 sm:px-8 sm:py-10 lg:grid-cols-4">
+        {facts.map(({ k, v, big, unit, note, Icon, from, accent }, i) => (
+          <Slide key={k} from={from} distance={80} duration={1.2} delay={i * 0.08}
+            className={`relative min-w-0 overflow-hidden rounded-2xl border p-5 sm:p-6 ${accent ? "border-lime/40 bg-gradient-to-br from-lime/15 via-forest to-ink" : "border-ivory/10 bg-ink/45"}`}>
+            <dt className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lime/15 text-lime"><Icon size={19} strokeWidth={1.8} /></span>
+              <span className="eyebrow text-lime">{k}</span>
+            </dt>
+            <dd className="mt-4">
+              {big ? (
+                <>
+                  <span className="font-serif text-3xl font-semibold leading-none text-ivory sm:text-4xl">{big}</span>
+                  {unit && <span className="ml-1.5 text-base text-ivory/55">{unit}</span>}
+                  {note && <span className="mt-2 block text-sm text-ivory/60">{note}</span>}
+                </>
+              ) : (
+                <span className="block font-serif text-xl leading-snug text-ivory sm:text-2xl">{v}</span>
+              )}
+            </dd>
           </Slide>
         ))}
       </dl>
@@ -424,6 +477,7 @@ const categoryIcon = {
 
 function CategoryCard({ c, i }) {
   const reduce = useReducedMotion();
+  const touch = useTouch();
   const [bad, setBad] = useState(false);
   const src = !bad ? ownPhoto(c.id) || keywordPhoto(c) || categoryPhotos[c.id] : null;
   const Icon = categoryIcon[c.id] || keywordIcon(c) || UtensilsCrossed;
@@ -438,10 +492,10 @@ function CategoryCard({ c, i }) {
           loading="lazy"
           decoding="async"
           onError={() => setBad(true)}
-          initial={{ scale: reduce ? 1 : 1.4 }}
+          initial={{ scale: reduce || touch ? 1 : 1.25 }}
           whileInView={{ scale: 1 }}
           viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 2.4, ease: EASE }}
+          transition={{ duration: 1.6, ease: EASE }}
           className="h-full w-full object-cover"
         />
       ) : (
@@ -453,8 +507,8 @@ function CategoryCard({ c, i }) {
       <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" aria-hidden="true" />
 
       <motion.span
-        className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-ink/65 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-[0.2em] text-lime backdrop-blur"
-        animate={reduce ? undefined : { y: [0, -5, 0] }}
+        className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-ink/75 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-[0.2em] text-lime"
+        animate={reduce || touch ? undefined : { y: [0, -5, 0] }}
         transition={{ duration: 4 + (i % 3), repeat: Infinity, ease: "easeInOut" }}
       >
         <Icon size={14} /> {String(i + 1).padStart(2, "0")}
@@ -508,7 +562,7 @@ function CategoryCard({ c, i }) {
         front={front}
         back={back}
         aria-label={`${c.name}: ${c.count} dishes, from ${inr(c.from)}`}
-        className="relative block aspect-[4/5] rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-lime/70"
+        className="relative block aspect-[4/5] touch-manipulation rounded-3xl outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-lime/70"
       />
     </Slide>
   );
@@ -557,13 +611,13 @@ function DirectOrderBanner() {
 }
 
 function Categories() {
+  const touch = useTouch();
   return (
     <section className="relative overflow-hidden bg-ink py-24 sm:py-32" aria-label="Menu categories">
-      <div className="pointer-events-none absolute right-0 top-0 h-96 w-96 rounded-full bg-heritage/30 blur-[120px]" aria-hidden="true" />
-      <div className="pointer-events-none absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-lime/10 blur-[120px]" aria-hidden="true" />
+      <div className="pointer-events-none absolute right-0 top-0 hidden h-96 w-96 rounded-full bg-heritage/30 blur-[100px] md:block" aria-hidden="true" />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
         <Slide from="left" distance={100}>
-          <SectionHeading eyebrow="The menu" title="Choose your" accent="craving">From tandoor starters to dum biryani, there is a section for every craving. Hover a card to peek inside, tap to jump straight in.</SectionHeading>
+          <SectionHeading eyebrow="The menu" title="Choose your" accent="craving">From tandoor starters to dum biryani, there is a section for every craving. {touch ? "Tap the flip button on a card to peek inside, or tap the card to jump straight in." : "Hover a card to peek inside, click to jump straight in."}</SectionHeading>
         </Slide>
         <ul className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {categories.map((c, i) => <li key={c.id}><CategoryCard c={c} i={i} /></li>)}
@@ -607,23 +661,54 @@ function Atmosphere() {
 /* ------------------------------------------------------------------ */
 function Rating() {
   const r = business.rating;
+  // Review link used by the "Write a review" button AND the QR code.
+  const writeUrl = REVIEW_URL;
+  const [qr, setQr] = useState("");
+  useEffect(() => {
+    let live = true;
+    QRCode.toDataURL(writeUrl, { margin: 1, width: 400, errorCorrectionLevel: "M", color: { dark: "#08140e", light: "#ffffff" } })
+      .then((u) => live && setQr(u)).catch(() => {});
+    return () => { live = false; };
+  }, [writeUrl]);
+
   return (
-    <section className="overflow-x-clip bg-ink py-24 sm:py-28" aria-labelledby="rating-title">
-      <div className="mx-auto max-w-5xl px-5 sm:px-8">
-        <Slide from="left" distance={180} duration={1.9} className="glass relative overflow-hidden rounded-[2rem] p-8 sm:p-14">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-violet/20 blur-[90px]" aria-hidden="true" />
-          <div className="relative grid items-center gap-10 md:grid-cols-[auto_1fr]">
-            <Slide from="left" distance={80} delay={0.4} className="text-center md:text-left">
-              <p className="font-serif text-8xl font-semibold leading-none text-lime-gradient">{r.value}</p>
-              <div className="mt-3 flex justify-center md:justify-start"><StarRating value={r.value} size={22} /></div>
-              <p className="mt-2 text-sm uppercase tracking-widest text-ivory/55">out of {r.outOf}</p>
-            </Slide>
-            <Slide from="right" distance={120} delay={0.6}>
-              <p className="eyebrow flex items-center gap-2 text-lime"><Star size={14} fill="currentColor" /> What guests say</p>
-              <h2 id="rating-title" className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-4xl">Rated {r.value} from {r.count} reviews on Google</h2>
-              <p className="mt-4 text-ivory/65">Figures are taken from the {r.source} and may change over time. Read the latest reviews directly on Google.</p>
-              <a href={googleReviewsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost mt-7">Read reviews on Google <ArrowUpRight size={16} /></a>
-            </Slide>
+    <section className="overflow-x-clip bg-ink py-20 sm:py-28" aria-labelledby="rating-title">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <Slide from="up" distance={60} duration={1.3} className="relative overflow-hidden rounded-[1.75rem] border border-lime/20 bg-gradient-to-br from-forest via-ink to-ink sm:rounded-[2rem]">
+          <div className="pointer-events-none absolute -right-24 -top-24 hidden h-72 w-72 rounded-full bg-lime/10 blur-[90px] md:block" aria-hidden="true" />
+          <div className="relative grid gap-px bg-ivory/10 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)_auto]">
+            {/* score */}
+            <div className="flex flex-col items-center justify-center bg-forest/80 p-8 text-center sm:p-10 lg:items-start lg:text-left">
+              <p className="eyebrow flex items-center gap-2 text-lime"><Star size={14} fill="currentColor" /> Google rating</p>
+              <p className="mt-4 font-serif text-7xl font-semibold leading-none text-lime-gradient sm:text-8xl">{r.value}</p>
+              <div className="mt-4"><StarRating value={r.value} size={22} /></div>
+              <p className="mt-3 text-sm text-ivory/65">out of {r.outOf} · {r.count} reviews</p>
+            </div>
+
+            {/* message + actions */}
+            <div className="flex flex-col justify-center bg-ink/90 p-7 sm:p-10">
+              <p className="eyebrow flex items-center gap-2 text-lime"><PenLine size={14} /> What guests say</p>
+              <h2 id="rating-title" className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-4xl">
+                Enjoyed your meal? <em className="text-lime-gradient font-medium italic">Leave us a review.</em>
+              </h2>
+              <p className="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-ivory/65">
+                Your review takes less than a minute and helps other people in Jatni find us. Tap the button, or scan the code with another phone.
+              </p>
+              <div className="mt-7 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:flex-wrap">
+                <a href={writeUrl} target="_blank" rel="noopener noreferrer" className="btn btn-lime justify-center"><PenLine size={16} /> Write a review</a>
+                <a href={googleReviewsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost justify-center">Read reviews <ExternalLink size={15} /></a>
+              </div>
+              <p className="mt-5 text-xs leading-relaxed text-ivory/40">Rating from the {r.source}; it can change over time.</p>
+            </div>
+
+            {/* QR (hidden on small phones, where the button does the job) */}
+            <div className="hidden flex-col items-center justify-center gap-3 bg-forest/80 p-8 sm:flex sm:p-10">
+              <div className="rounded-2xl bg-white p-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.8)]">
+                {qr ? <img src={qr} alt="QR code: scan to write a Google review for Tasty Tasty Greenchilly" width="176" height="176" className="h-44 w-44" /> : <span className="block h-44 w-44" />}
+              </div>
+              <p className="text-center text-sm font-medium text-ivory">Scan to review</p>
+              <p className="max-w-[11rem] text-center text-xs leading-snug text-ivory/50">Point your phone camera at the code</p>
+            </div>
           </div>
         </Slide>
       </div>

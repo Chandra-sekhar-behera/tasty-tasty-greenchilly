@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import DoodleCrewFooter from "./DoodleCrewFooter.jsx";
 import { business, mapsDirectionsUrl, googleReviewsUrl } from "../config/business.js";
 import { enquiryUrl } from "../lib/whatsapp.js";
@@ -18,65 +19,79 @@ const CREW = [
   { kind: "cat", letter: 10, seat: "front", offset: 0.42, flip: true, name: "Patch", says: "Meow. Fish curry?" },
 ];
 
+// Everything below is created ONCE (not on every render), so the footer animation never restarts or stutters
+const DOODLES = ["flame", "sandwich", "star", "flame", "heart", "sandwich", "bolt", "sparkle"];
+const PALETTE = { background: "#0c2118", ink: "#f7f7f0", accent: "#8bcb35" };
+const WRAP_STYLE = { background: "#0c2118" };
+const ACTIONS = [
+  { label: "Order on WhatsApp", href: enquiryUrl(), icon: "flame", variant: "solid" },
+  { label: "Call us", href: `tel:${business.contact.phoneTel}`, icon: "bolt", variant: "outline" },
+];
+const SOCIALS = [{ label: `Instagram · ${IG_FOLLOWERS}`, href: IG_URL }];
+const LEGAL = [];
+const COPYRIGHT = `© ${new Date().getFullYear()} ${business.name}. Menu, prices and availability are confirmed on WhatsApp.`;
+const BLURB = `Biryani, tandoor grills, curries and Indo-Chinese favourites, cooked fresh at ${business.address.line1}, Jatni.`;
+
 export default function Footer() {
   useMenuVersion();
 
-  const columns = [
-    {
-      title: "Explore",
-      links: [
-        { label: "Home", href: "/" },
-        { label: "Menu", href: "/menu" },
-        { label: "About", href: "/about" },
-        { label: "Visit Us", href: "/visit-us" },
-      ],
-    },
-    {
-      title: "From the menu",
-      links: [
-        ...categories.slice(0, 4).map((c) => ({ label: c.name, href: `/menu?cat=${c.id}` })),
-        { label: "Full menu", href: "/menu" },
-      ],
-    },
-    {
-      title: "Order",
-      links: [
-        { label: "On WhatsApp", href: enquiryUrl() },
-        { label: "Call us", href: `tel:${business.contact.phoneTel}` },
-        { label: "Directions", href: mapsDirectionsUrl },
-        { label: `Google ★ ${business.rating.value}`, href: googleReviewsUrl },
-      ],
-    },
-    {
-      title: "Visit",
-      links: [
-        { label: business.address.line1 },
-        { label: "Jatni, Odisha" },
-        { label: business.hours.label },
-        { label: business.contact.phoneDisplay, href: `tel:${business.contact.phoneTel}` },
-      ],
-    },
-  ];
+  const columns = useMemo(
+    () => [
+      {
+        title: "Explore",
+        links: [
+          { label: "Home", href: "/" },
+          { label: "Menu", href: "/menu" },
+          { label: "About", href: "/about" },
+          { label: "Visit Us", href: "/visit-us" },
+        ],
+      },
+      {
+        title: "From the menu",
+        links: [
+          ...categories.slice(0, 4).map((c) => ({ label: c.name, href: `/menu?cat=${c.id}` })),
+          { label: "Full menu", href: "/menu" },
+        ],
+      },
+      {
+        title: "Order",
+        links: [
+          { label: "On WhatsApp", href: enquiryUrl() },
+          { label: "Call us", href: `tel:${business.contact.phoneTel}` },
+          { label: "Directions", href: mapsDirectionsUrl },
+          { label: `Google ★ ${business.rating.value}`, href: googleReviewsUrl },
+        ],
+      },
+      {
+        title: "Visit",
+        links: [
+          { label: business.address.line1 },
+          { label: "Jatni, Odisha" },
+          { label: business.hours.label },
+          { label: business.contact.phoneDisplay, href: `tel:${business.contact.phoneTel}` },
+        ],
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [categories.length, categories[0]?.id]
+  );
 
   return (
-    <div className="pb-20 lg:pb-0" style={{ background: "#0c2118" }}>
+    <div className="pb-20 lg:pb-0" style={WRAP_STYLE}>
       <DoodleCrewFooter
         wordmark="GREENCHILLY"
         brand="Tasty Tasty Greenchilly"
-        blurb={`Biryani, tandoor grills, curries and Indo-Chinese favourites, cooked fresh at ${business.address.line1}, Jatni.`}
+        blurb={BLURB}
         tagline="Indian, Chinese and Tandoor, freshly served in Jatni."
         columns={columns}
-        actions={[
-          { label: "Order on WhatsApp", href: enquiryUrl(), icon: "flame", variant: "solid" },
-          { label: "Call us", href: `tel:${business.contact.phoneTel}`, icon: "bolt", variant: "outline" },
-        ]}
-        copyright={`© ${new Date().getFullYear()} ${business.name}. Menu, prices and availability are confirmed on WhatsApp.`}
-        legal={[]}
-        socials={[{ label: `Instagram · ${IG_FOLLOWERS}`, href: IG_URL }]}
+        actions={ACTIONS}
+        copyright={COPYRIGHT}
+        legal={LEGAL}
+        socials={SOCIALS}
         crew={CREW}
-        doodles={["flame", "sandwich", "star", "flame", "heart", "sandwich", "bolt", "sparkle"]}
+        doodles={DOODLES}
         preset="night"
-        palette={{ background: "#0c2118", ink: "#f7f7f0", accent: "#8bcb35" }}
+        palette={PALETTE}
         height="640px"
       />
     </div>
