@@ -122,31 +122,30 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
 }
 
 /* ------------------------------------------------------------------ */
-/*  HERO (Optimized Video Handler)                                     */
+/*  HERO (Optimized Mobile Video Handler)                              */
 /* ------------------------------------------------------------------ */
 function HeroVideo() {
   const [failed, setFailed] = useState(false);
   const reduce = useReducedMotion();
-  const touch = useTouch();
   const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
   
-  // Always fallback to image if mobile, reduced motion, data saver or video error
-  const skip = reduce || touch || conn?.saveData || conn?.effectiveType === '2g' || failed;
+  // Fallback to image if reduced motion, data saver or video error
+  const skip = reduce || conn?.saveData || conn?.effectiveType === '2g' || failed;
   
   if (skip) {
     return <img src={biryani} alt="A plate of biryani served with sides" width="783" height="1020" fetchPriority="high" className="h-full w-full object-cover" />;
   }
   return (
     <video
-      className="h-full w-full scale-[1.04] object-cover"
+      className="absolute inset-0 -z-10 h-full w-full object-cover"
       src={heroVideo}
       poster={biryani}
       autoPlay
       muted
       loop
       playsInline
-      preload="metadata"
-      aria-label="Freshly served dishes at Tasty Tasty Greenchilly"
+      preload="auto"
+      aria-hidden="true"
       onError={() => setFailed(true)}
     />
   );

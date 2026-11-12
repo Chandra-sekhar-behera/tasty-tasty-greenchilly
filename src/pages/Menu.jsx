@@ -22,9 +22,6 @@ import heroVideo from "../assets/hero.mp4";
 const DIETS = [["all", "All"], ["veg", "Veg"], ["nonveg", "Non-veg"]];
 const EASE = [0.16, 1, 0.3, 1];
 
-// Quick sections that cut ACROSS the menu categories. They are worked out from the dish names,
-// so they keep working when dishes are added or renamed in the admin panel.
-// A section only shows up when at least one dish matches (e.g. "Roti & Naan" appears once such dishes exist).
 const COLLECTIONS = [
   { id: "biryani", label: "Biryani", re: /\b(biryani|biriyani|pulao|pulav)\b/i },
   { id: "mutton", label: "Mutton", re: /\b(mutton|lamb|gosht|keema)\b/i },
@@ -33,21 +30,15 @@ const COLLECTIONS = [
 ];
 const inCollection = (c, item) => c.re.test(item.name);
 
-/* ------------------------------------------------------------------ */
-/*  Photos                                                             */
-/* ------------------------------------------------------------------ */
 const px = (id) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop`;
 const pxHero = (id) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop`;
 
-// Your own photo for any dish: put  src/assets/item-<dish-name-with-dashes>.webp
 const droppedItemPhotos = import.meta.glob("../assets/item-*.{webp,jpg,jpeg,png}", { eager: true, import: "default" });
 const ownPhoto = (id) => {
   const hit = Object.entries(droppedItemPhotos).find(([p]) => p.includes(`/item-${id}.`));
   return hit ? hit[1] : null;
 };
 
-// Hero background. Priority: your own file  src/assets/menu-hero.(webp|jpg|png)  >  Pexels photo  >  interior.
-// To change the hero photo: drop a wide photo named menu-hero.webp into src/assets (best: 1920px wide).
 const droppedHero = import.meta.glob("../assets/menu-hero.{webp,jpg,jpeg,png}", { eager: true, import: "default" });
 const HERO_BG = Object.values(droppedHero)[0] || pxHero(5410401);
 
@@ -98,10 +89,8 @@ const iconFor = (id = "") =>
   categoryIcon[id] ||
   (/bread|roti|naan/.test(id) ? Wheat : /seafood|fish|prawn/.test(id) ? Fish : /mutton/.test(id) ? Beef : /biryani/.test(id) ? ChefHat : /soup/.test(id) ? Soup : UtensilsCrossed);
 
-// Sharper version of a Pexels photo for the big detail view (other sources are used as-is)
 const hiRes = (src) => (typeof src === "string" && src.includes("images.pexels.com") ? src.replace("w=800&h=600", "w=1400&h=1050") : src);
 
-// Shown instead of Add / quantity buttons while ordering is closed
 function ClosedButton({ className = "" }) {
   return (
     <span className={`flex items-center justify-center gap-1.5 rounded-full border border-ivory/20 px-3 py-2 text-center text-[0.65rem] font-medium uppercase tracking-[0.12em] text-ivory/55 ${className}`}>
@@ -110,9 +99,6 @@ function ClosedButton({ className = "" }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Slide-in helper                                                    */
-/* ------------------------------------------------------------------ */
 function Slide({ from = "left", delay = 0, duration = 1.2, distance = 70, className = "", children }) {
   const reduce = useReducedMotion();
   const d = reduce ? 0 : distance;
@@ -129,9 +115,6 @@ function Slide({ from = "left", delay = 0, duration = 1.2, distance = 70, classN
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Compact dish card (click opens the detail view)                    */
-/* ------------------------------------------------------------------ */
 function MenuCard({ item, index, onOpen, orderOpen }) {
   const { qtyOf, add, setQty } = useCart();
   const qty = qtyOf(item.id);
@@ -197,10 +180,6 @@ function MenuCard({ item, index, onOpen, orderOpen }) {
   );
 }
 
-
-/* ------------------------------------------------------------------ */
-/*  "Best value" carousel: offer text on the left, swipeable dishes    */
-/* ------------------------------------------------------------------ */
 const photoOf = (item) => ownPhoto(item.id) || item.image || ITEM_PHOTOS[item.name] || null;
 
 function PickCard({ item, onOpen, orderOpen }) {
@@ -288,7 +267,6 @@ function OfferCarousel({ items, onOpen, orderOpen, onSeeAll }) {
     if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: reduce ? "auto" : "smooth" });
   };
 
-  // soft fade on the side that still has more dishes
   const fade = `linear-gradient(to right, ${edge.start ? "#000" : "transparent"}, #000 ${edge.start ? "0%" : "5%"}, #000 ${edge.end ? "100%" : "94%"}, ${edge.end ? "#000" : "transparent"})`;
   const arrow = "absolute top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-lime/40 bg-ink/90 text-lime shadow-xl backdrop-blur transition hover:bg-lime hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime/70 md:grid";
 
@@ -297,7 +275,6 @@ function OfferCarousel({ items, onOpen, orderOpen, onSeeAll }) {
       <section aria-label="Best value dishes" className="relative overflow-hidden rounded-3xl border border-lime/20 bg-gradient-to-br from-heritage/60 via-forest to-ink p-5 sm:p-8">
         <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-lime/10 blur-[90px]" aria-hidden="true" />
         <div className="relative grid items-center gap-8 lg:grid-cols-12 lg:gap-10">
-          {/* left: the offer */}
           <div className="lg:col-span-4">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-lime/15 text-lime ring-1 ring-lime/30"><IndianRupee size={22} /></span>
             <p className="eyebrow mt-5 text-lime">Order direct</p>
@@ -311,7 +288,6 @@ function OfferCarousel({ items, onOpen, orderOpen, onSeeAll }) {
             <p className="mt-4 text-[0.7rem] leading-relaxed text-ivory/40">Delivery charge, if any, is confirmed by the restaurant on WhatsApp.</p>
           </div>
 
-          {/* right: swipeable dishes */}
           <div className="relative min-w-0 lg:col-span-8">
             <div
               ref={trackRef}
@@ -333,9 +309,6 @@ function OfferCarousel({ items, onOpen, orderOpen, onSeeAll }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Dish detail modal: photo grows out of the card                     */
-/* ------------------------------------------------------------------ */
 const modalList = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.25 } } };
 const modalItem = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } } };
 
@@ -387,7 +360,6 @@ function DishModal({ open, onClose, orderOpen }) {
             >
               {src ? (
                 <>
-                  {/* same photo as the card shows instantly, sharper copy fades in on top once loaded */}
                   <SmartImg src={src} alt={item.name} referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover object-center" />
                   {hiRes(src) !== src && (
                     <img
@@ -440,31 +412,29 @@ function DishModal({ open, onClose, orderOpen }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Hero: full-bleed background photo                                  */
-/* ------------------------------------------------------------------ */
 function MenuHero({ status }) {
   const ref = useRef(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const bgY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 90]);
-  const [bg, setBg] = useState(HERO_BG);
+  const [bg] = useState(HERO_BG);
   const [videoFailed, setVideoFailed] = useState(false);
   const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
-  const still = reduce || conn?.saveData || videoFailed; // reduced motion / data saver / broken file -> still photo
+  const still = reduce || conn?.saveData || videoFailed;
+
   const stats = [
     { Icon: UtensilsCrossed, v: `${menuItems.length}`, l: "Dishes" },
     { Icon: LayoutGrid, v: `${categories.length}`, l: "Sections" },
     { Icon: Flame, v: "Tandoor", l: "Grills" },
     { Icon: Leaf, v: "Veg & Non-veg", l: "Both" },
   ];
+
   return (
     <section ref={ref} className="noise relative isolate flex min-h-[80svh] items-end overflow-hidden bg-ink pb-14 pt-40 sm:pb-16">
       <motion.div style={{ y: bgY }} className="absolute inset-x-0 -top-[10%] -z-20 h-[120%]" aria-hidden="true">
         {still ? (
           <motion.img
             src={bg} alt="" fetchPriority="high"
-            onError={() => bg !== interior && setBg(interior)}
             initial={{ scale: reduce ? 1 : 1.18 }} animate={{ scale: 1 }}
             transition={{ duration: 3, ease: EASE }}
             className="h-full w-full object-cover object-center"
@@ -515,10 +485,6 @@ function MenuHero({ status }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
-
 export default function Menu() {
   usePageTitle("Menu");
   const mv = useMenuVersion();
@@ -531,7 +497,7 @@ export default function Menu() {
   const resultsRef = useRef(null);
   const chipsRef = useRef(null);
   const barRef = useRef(null);
-  const holdRef = useRef(0); // keeps the bar open for a moment after a tab click
+  const holdRef = useRef(0);
   const listRef = useRef(null);
   const closeDish = useCallback(() => setOpenDish(null), []);
 
@@ -539,7 +505,6 @@ export default function Menu() {
   const diet = DIETS.some(([k]) => k === params.get("diet")) ? params.get("diet") : "all";
   const collections = useMemo(
     () => COLLECTIONS.map((c) => ({ ...c, count: menuItems.filter((i) => inCollection(c, i)).length })).filter((c) => c.count > 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [mv]
   );
   const colId = collections.some((c) => c.id === params.get("col")) ? params.get("col") : "all";
@@ -561,14 +526,12 @@ export default function Menu() {
 
   useEffect(() => {
     if (params.get("cat")) { const t = setTimeout(goToResults, 450); return () => clearTimeout(t); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     chipsRef.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ inline: "center", block: "nearest", behavior: reduce ? "auto" : "smooth" });
   }, [cat, colId, reduce, collapsed]);
 
-  /* scroll down -> toolbar slides away; scroll up -> it comes back */
   useEffect(() => {
     let lastY = window.scrollY;
     let ticking = false;
@@ -609,19 +572,16 @@ export default function Menu() {
         (!needle || searchableText.includes(needle))
       );
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, colId, diet, q, mv]);
 
   const groups = useMemo(
     () => (col ? [{ id: col.id, name: col.label, items: results }] : categories.map((c) => ({ ...c, items: results.filter((i) => i.categoryId === c.id) })).filter((g) => g.items.length)),
     [results, col]
   );
-  // cheapest dishes that already have a photo (no invented discounts: these are simply the lowest menu prices)
   const picks = useMemo(() => {
     const live = menuItems.filter((i) => i.available !== false);
     const withPhoto = live.filter((i) => photoOf(i));
     return [...(withPhoto.length >= 4 ? withPhoto : live)].sort((a, b) => a.price - b.price).slice(0, 8);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mv]);
   const seeAll = () => listRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   const activeFilters = (diet !== "all" ? 1 : 0) + (q.trim() ? 1 : 0);
@@ -634,7 +594,6 @@ export default function Menu() {
     <>
       <MenuHero status={status} />
 
-      {/* Sticky toolbar: search + diet on top, section tabs below. Slides away while scrolling down. */}
       <div ref={barRef} className="sticky top-[4.5rem] z-30 h-0 lg:top-20">
         <div className={`absolute inset-x-0 top-0 border-b border-ivory/10 bg-ink/95 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.95)] backdrop-blur-xl transition-[transform,opacity] duration-500 ease-out ${collapsed ? "pointer-events-none -translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
           <div className="mx-auto max-w-7xl px-4 sm:px-8">

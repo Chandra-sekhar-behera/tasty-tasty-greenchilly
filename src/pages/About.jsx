@@ -92,7 +92,6 @@ export default function About() {
   const reduce = useReducedMotion();
   const heroRef = useRef(null);
   
-  // Lightweight scroll check for mobile safety
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const bgY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 30]);
   const textY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : -20]);
@@ -100,7 +99,7 @@ export default function About() {
   
   const [photo, setPhoto] = useState(null);
   const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
-  const noVideo = reduce || conn?.saveData || window.innerWidth < 768; // Disable video automatically on mobile for peak performance
+  const noVideo = reduce || conn?.saveData; // Removed window.innerWidth check so mobile plays video nicely
 
   const stats = [
     { Icon: UtensilsCrossed, v: `${menuItems.length}`, l: "Dishes on the menu", from: "left" },
