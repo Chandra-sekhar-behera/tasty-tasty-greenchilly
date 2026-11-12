@@ -419,8 +419,10 @@ function MenuHero({ status }) {
   const bgY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 90]);
   const [bg] = useState(HERO_BG);
   const [videoFailed, setVideoFailed] = useState(false);
-  const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
-  const still = reduce || conn?.saveData || videoFailed;
+  const reduceMotion = useReducedMotion();
+  
+  // Mobile par video chalane ke liye saveData aur reduced motion ke alawa baaki sab checks hata diye hain
+  const skip = reduceMotion || videoFailed;
 
   const stats = [
     { Icon: UtensilsCrossed, v: `${menuItems.length}`, l: "Dishes" },
@@ -432,7 +434,7 @@ function MenuHero({ status }) {
   return (
     <section ref={ref} className="noise relative isolate flex min-h-[80svh] items-end overflow-hidden bg-ink pb-14 pt-40 sm:pb-16">
       <motion.div style={{ y: bgY }} className="absolute inset-x-0 -top-[10%] -z-20 h-[120%]" aria-hidden="true">
-        {still ? (
+        {skip ? (
           <motion.img
             src={bg} alt="" fetchPriority="high"
             initial={{ scale: reduce ? 1 : 1.18 }} animate={{ scale: 1 }}
