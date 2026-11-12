@@ -122,20 +122,19 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
 }
 
 /* ------------------------------------------------------------------ */
-/*  HERO (100x Optimized Ultra-Smooth Mobile Video Handler)             */
+/*  HERO (Foolproof Cross-Device Video Handler)                        */
 /* ------------------------------------------------------------------ */
 function HeroVideo() {
   const [failed, setFailed] = useState(false);
   const reduce = useReducedMotion();
-  
-  // Only fallback if user explicitly has reduced-motion enabled or video fails to load
+
   if (reduce || failed) {
     return <img src={biryani} alt="A plate of biryani served with sides" width="783" height="1020" fetchPriority="high" className="h-full w-full object-cover" />;
   }
-  
+
   return (
     <video
-      className="absolute inset-0 -z-10 h-full w-full object-cover"
+      className="absolute inset-0 h-full w-full object-cover"
       style={{ transform: "translateZ(0)", willChange: "transform" }}
       src={heroVideo}
       poster={biryani}
@@ -144,7 +143,6 @@ function HeroVideo() {
       loop
       playsInline
       preload="auto"
-      aria-hidden="true"
       onError={() => setFailed(true)}
     />
   );
