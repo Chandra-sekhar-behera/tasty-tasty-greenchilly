@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, Send, Check, Plus, ShoppingBag, ChevronRight, Clock, Sparkles } from "lucide-react";
 import WhatsAppIcon from "./WhatsAppIcon.jsx";
-import logo from "../assets/Tasty Tasty Greenchilly Logo.png";
 import robotChefIcon from "../assets/Robot Chef.png";
 import { useCart } from "../context/CartContext.jsx";
 import { categories, menuById, menuItems, useMenuVersion } from "../lib/menuStore.js";
@@ -10,14 +9,9 @@ import { business } from "../config/business.js";
 import { inr } from "../lib/format.js";
 import { getOrderStatus, useOrderStatus, ORDER_HOURS_LABEL } from "../lib/orderHours.js";
 
-/* ------------------------------------------------------------------ */
-/*  Settings & Robust Fallback Models                                  */
-/* ------------------------------------------------------------------ */
-// Local aur Vercel dono jagah ke liye secure environment variable mapping
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const OWNER_WHATSAPP = business.contact.whatsappNumber;
 
-// Safer models list combining env config and built-in fallbacks
 const PRIMARY_MODEL = import.meta.env.VITE_GEMINI_MODEL || "gemini-2.5-flash";
 const MODELS = [
   PRIMARY_MODEL,
@@ -26,15 +20,14 @@ const MODELS = [
   "gemini-3.5-flash-lite",
   "gemini-3.8-flash",
   "gemini-1.5-flash",
-].filter((v, i, arr) => v && arr.indexOf(v) === i); // removes duplicates & empty values
+].filter((v, i, arr) => v && arr.indexOf(v) === i);
 
 const EASE = [0.16, 1, 0.3, 1];
 const HOURS_TEXT = ORDER_HOURS_LABEL.replace(/\s+/g, " ");
-const GREETING = `Namaste ji! 🤖🍳 Main ${business.shortName} ka Robot Chef assistant hoon. Poore menu ke kisi bhi dish, category, veg/non-veg ya budget ke baare mein kabhi bhi puchiye. Order lene ka time: ${HOURS_TEXT}. Neeche ke buttons se bhi dekh sakte hain.`;
+const GREETING = `Namaste ji! 🤖🍳 Main ${business.shortName} ka Robot Chef assistant hoon. Poore menu ke kisi bhi dish, category, veg/non-veg ya budget ke baare mein kabhi bhi puchiye. Order lene ka time: ${HOURS_TEXT}.`;
 
-const closedText = () => `Abhi order lena band hai ji 🙏 ${getOrderStatus().short}. Order ka time: ${HOURS_TEXT}. Tab tak aap menu dekh sakte hain aur kuch bhi puch sakte hain.`;
+const closedText = () => `Abhi order lena band hai ji 🙏 ${getOrderStatus().short}. Order ka time: ${HOURS_TEXT}. Tab tak aap menu dekh sakte hain.`;
 const addHint = () => (getOrderStatus().open ? "Add dabake seedha order mein jodiye." : "Order abhi band hai, aap menu dekh sakte hain.");
-
 const baseName = (n) => n.replace(/\s*\((veg|non-veg)\)\s*$/i, "").trim();
 
 function buildMenuText() {
@@ -58,16 +51,13 @@ function cartText(lines) {
 
 function buildSystemInstruction(cartLines) {
   const pay = business.payment || {};
-  const payNote = pay.upiId
-    ? `Payment: ${(pay.requiredFor || []).includes("delivery") ? "delivery orders must be paid in advance by UPI, either Half (" + pay.halfPercent + "%) or Full, and the customer then shares the payment screenshot on WhatsApp." : "UPI advance payment is optional."} Pickup orders: ${(pay.requiredFor || []).includes("pickup") ? "also paid in advance." : "pay at the restaurant."}`
-    : "Payment: confirmed by the restaurant on WhatsApp.";
   return `You are the virtual Robot Chef host of "${business.name}", a family restaurant at ${business.address.line1}, ${business.address.line2}. Cuisines: ${business.cuisines.join(", ")}.
 
 YOUR JOB: help guests explore the menu, choose dishes, and place an order. You know the COMPLETE menu below (${menuItems.length} dishes, grouped by category).
 
 LANGUAGE AND TONE
 - Reply in the same language and script the guest uses (Hindi, Hinglish, Odia or English).
-- Warm, polite, playful and respectful, like a smart robotic chef. Never flirt. Keep replies short: 2 to 5 lines.
+- Warm, polite, playful and respectful, like a smart robotic chef. Keep replies short: 2 to 5 lines.
 - Use plain text. Short "-" bullets are fine. Do not use tables or headings.
 
 MENU RULES
@@ -198,13 +188,10 @@ function mentionedDishes(reply, max = 4) {
 async function fetchWithFallback(contents, cartLines) {
   let lastError = null;
   const system = buildSystemInstruction(cartLines);
-  
-  // Debugging check to ensure API key is available at runtime
-  console.log("API Key loaded check:", API_KEY ? "Yes" : "No");
 
   for (const model of MODELS) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
       const response = await fetch(url, {
@@ -280,16 +267,15 @@ function DishRow({ id, cart, orderOpen }) {
 
 function ConfirmSend({ onNo, onYes }) {
   const noRef = useRef(null);
-  const yesRef = useRef(null);
   useEffect(() => { noRef.current?.focus(); }, []);
   return (
     <motion.div className="absolute inset-0 z-20 grid place-items-center bg-ink/80 p-5 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onNo}>
       <motion.div
         role="alertdialog" aria-modal="true" aria-labelledby="chat-confirm-title"
-        initial={{ opacity: 0, y: 24, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.97 }}
-        transition={{ duration: 0.4, ease: EASE }}
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xs overflow-hidden rounded-3xl border border-lime/30 bg-gradient-to-br from-heritage via-forest to-ink p-6 text-center shadow-2xl"
+        className="relative w-full max-w-xs overflow-hidden rounded-3xl border border-lime/30 bg-forest p-6 text-center shadow-2xl"
       >
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-lime/15 text-lime ring-1 ring-lime/40">
           <img src={robotChefIcon} alt="Robot Chef" className="h-8 w-8 object-contain" />
@@ -298,7 +284,7 @@ function ConfirmSend({ onNo, onYes }) {
         <p className="mt-2 text-sm leading-relaxed text-ivory/70">Are you sure you want to send your order to {business.shortName} on WhatsApp?</p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button ref={noRef} type="button" onClick={onNo} className="btn btn-ghost justify-center"><X size={16} /> No</button>
-          <button ref={yesRef} type="button" onClick={onYes} className="btn btn-lime justify-center"><Check size={16} /> Yes, send</button>
+          <button type="button" onClick={onYes} className="btn btn-lime justify-center"><Check size={16} /> Yes, send</button>
         </div>
       </motion.div>
     </motion.div>
@@ -331,14 +317,13 @@ export default function ChatAssistant() {
   const [orderSummary, setOrderSummary] = useState("");
 
   const chatEndRef = useRef(null);
-  const messagesContainerRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading, isOpen, confirm, leadStep]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowTooltip(false), 8000);
+    const timer = setTimeout(() => setShowTooltip(false), 6000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -427,7 +412,7 @@ export default function ChatAssistant() {
 
       const contents = updatedMessages
         .filter((m) => m.text)
-        .slice(-12)
+        .slice(-10)
         .map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }));
       while (contents.length && contents[0].role !== "user") contents.shift();
 
@@ -436,12 +421,12 @@ export default function ChatAssistant() {
       push({ role: "model", text: aiReply, dishes });
 
       if (ORDER_RE.test(userText) && status.open) push({ role: "model", actions: true });
-    } catch (err) {
+    } catch {
       const fallback = localSearch(userText);
       if (fallback) {
         push({ role: "model", text: fallback.text, list: { title: fallback.title, ids: fallback.ids, more: fallback.more } });
       } else {
-        push({ role: "model", text: "Arre lagta hai network thoda busy hai! 🌿 Neeche ke category buttons se menu dekh sakte hain." });
+        push({ role: "model", text: "Arre network busy hai! 🌿 Neeche ke category buttons se menu dekh sakte hain." });
       }
     } finally {
       setLoading(false);
@@ -462,14 +447,14 @@ export default function ChatAssistant() {
       <AnimatePresence>
         {!isOpen && showTooltip && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-            className="mb-3 mr-1 max-w-[260px] rounded-2xl border border-lime/30 bg-ink/95 px-4 py-3 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.6)] backdrop-blur-xl sm:max-w-xs"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="mb-3 mr-1 max-w-[260px] rounded-2xl border border-lime/30 bg-ink/95 px-4 py-3 text-xs shadow-xl backdrop-blur-xl sm:max-w-xs"
           >
             <div className="flex items-start justify-between gap-2">
               <span className="font-semibold text-lime flex items-center gap-1"><Sparkles size={12} /> {business.shortName} Robot Chef</span>
               <button type="button" onClick={() => setShowTooltip(false)} aria-label="Dismiss" className="text-ivory/60 hover:text-ivory"><X size={14} /></button>
             </div>
-            <p className="mt-1 text-ivory/90">Hi! Ask me about any dish, category or budget.</p>
+            <p className="mt-1 text-ivory/90">Hi! Ask me about any dish or budget.</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -478,28 +463,20 @@ export default function ChatAssistant() {
       <motion.button
         type="button"
         onClick={() => { setIsOpen(!isOpen); setShowTooltip(false); }}
-        whileHover={{ scale: 1.15, rotate: [0, -10, 10, -10, 10, 0] }}
-        whileTap={{ scale: 0.9 }}
-        animate={{ 
-          y: [0, -8, 0],
-          rotate: [0, 5, -5, 0]
-        }}
-        transition={{ 
-          y: { repeat: Infinity, duration: 1.5, ease: "easeInOut" },
-          rotate: { repeat: Infinity, duration: 2, ease: "easeInOut" }
-        }}
-        className="relative flex h-20 w-20 items-center justify-center p-0 bg-transparent border-none outline-none cursor-pointer drop-shadow-[0_12px_25px_rgba(16,185,129,0.6)]"
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
+        className="relative flex h-16 w-16 items-center justify-center p-0 bg-transparent border-none outline-none cursor-pointer drop-shadow-[0_8px_20px_rgba(16,185,129,0.5)] will-change-transform"
         aria-label={isOpen ? "Close Robot Chef assistant" : "Open Robot Chef assistant"} aria-expanded={isOpen}
       >
         {isOpen ? (
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-forest border border-lime text-ivory shadow-xl">
-            <X size={28} />
+            <X size={26} />
           </div>
         ) : (
-          <img src={robotChefIcon} alt="Robot Chef" className="h-full w-full object-contain filter drop-shadow-[0_8px_12px_rgba(0,0,0,0.5)]" />
+          <img src={robotChefIcon} alt="Robot Chef" className="h-full w-full object-contain filter drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]" />
         )}
         {!isOpen && (
-          <span className="absolute top-1 right-1 flex h-4 w-4 animate-ping rounded-full bg-lime" />
+          <span className="absolute top-0 right-0 flex h-3.5 w-3.5 animate-ping rounded-full bg-lime" />
         )}
       </motion.button>
 
@@ -508,28 +485,28 @@ export default function ChatAssistant() {
         {isOpen && (
           <motion.div
             role="dialog" aria-label={`${business.shortName} Robot Chef assistant`}
-            initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.35, ease: EASE }}
-            className="absolute bottom-24 right-0 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-lime/30 bg-forest/95 shadow-[0_20px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl sm:w-[400px] sm:max-w-[400px] max-h-[calc(100vh-140px)]"
-            style={{ height: "min(520px, 68vh)", transformOrigin: "bottom right" }}
+            initial={{ opacity: 0, y: 15, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 15, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: EASE }}
+            className="absolute bottom-20 right-0 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-lime/30 bg-forest/95 shadow-2xl backdrop-blur-xl sm:w-[400px] sm:max-w-[400px] max-h-[calc(100vh-120px)] will-change-transform"
+            style={{ height: "min(500px, 65vh)" }}
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-ivory/10 bg-gradient-to-r from-lime/15 to-transparent px-3 py-2.5 sm:px-4">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="relative shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-lime/20 border border-lime/40 p-1">
+                <div className="relative shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-lime/20 border border-lime/40 p-1">
                   <img src={robotChefIcon} alt="Robot Chef" className="h-full w-full object-contain" />
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-forest" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate font-serif text-base font-semibold leading-tight text-ivory">{business.shortName} Robot Chef</h3>
-                  <p className="truncate text-[10px] text-lime">{status.open ? status.short : status.short + " · Ask anything"} · {menuItems.length} dishes</p>
+                  <h3 className="truncate font-serif text-sm font-semibold leading-tight text-ivory">{business.shortName} Robot Chef</h3>
+                  <p className="truncate text-[10px] text-lime">{status.open ? status.short : status.short + " · Ask anything"}</p>
                 </div>
               </div>
               <button type="button" onClick={() => setIsOpen(false)} aria-label="Close chat" className="rounded-full p-1.5 text-ivory/70 transition hover:bg-ivory/10 hover:text-ivory"><X size={18} /></button>
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 text-xs sm:p-4" style={{ overflowAnchor: "none" }}>
+            <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 text-xs sm:p-4">
               {messages.map((m, i) => {
                 if (m.actions) {
                   return (
@@ -561,7 +538,7 @@ export default function ChatAssistant() {
                     {m.list && m.list.ids.length > 0 && (
                       <div className="mt-2 w-full max-w-[96%] rounded-2xl border border-ivory/10 bg-ink/40 px-3 py-1">
                         <p className="border-b border-ivory/10 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-lime">{m.list.title}</p>
-                        <ul className="max-h-60 divide-y divide-ivory/5 overflow-y-auto overscroll-contain text-ivory/90">
+                        <ul className="max-h-52 divide-y divide-ivory/5 overflow-y-auto overscroll-contain text-ivory/90">
                           {m.list.ids.map((id) => <DishRow key={id} id={id} cart={cart} orderOpen={status.open} />)}
                         </ul>
                         {m.list.more > 0 && <p className="py-1.5 text-[10px] text-ivory/50">+ {m.list.more} aur dishes. Naam ya budget se search kijiye.</p>}
