@@ -56,18 +56,17 @@ function Slide({ from = "left", delay = 0, duration = 1.6, distance = 140, class
   const reduce = useReducedMotion();
   const touch = useTouch();
   const Tag = motion[as] || motion.div;
-  // phones: short, quick slide-up instead of long sideways slides (smoother, no sideways overflow)
-  const d = reduce ? 0 : touch ? Math.min(distance, 30) : distance;
+  const d = reduce ? 0 : touch ? Math.min(distance, 20) : distance;
   const start = touch
     ? { opacity: 0, x: 0, y: d }
-    : { opacity: 0, x: from === "left" ? -d : from === "right" ? d : 0, y: from === "up" ? Math.min(d, 70) : 0 };
-  if (touch) { duration = Math.min(duration, 0.7); delay = Math.min(delay, 0.2); }
+    : { opacity: 0, x: from === "left" ? -d : from === "right" ? d : 0, y: from === "up" ? Math.min(d, 50) : 0 };
+  if (touch) { duration = Math.min(duration, 0.5); delay = Math.min(delay, 0.1); }
   return (
     <Tag
       className={className}
       initial={start}
       whileInView={{ opacity: 1, x: 0, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
+      viewport={{ once: true, margin: "-20px" }}
       transition={{ duration: reduce ? 0.01 : duration, delay, ease: EASE }}
       {...rest}
     >
@@ -77,9 +76,7 @@ function Slide({ from = "left", delay = 0, duration = 1.6, distance = 140, class
 }
 
 /* ------------------------------------------------------------------ */
-/*  FlipCard: flips when the mouse enters, returns when it leaves      */
-/*  (also flips on keyboard focus). Touch screens do not flip, so a    */
-/*  tap still opens the link / dish normally.                          */
+/*  FlipCard: flips when mouse enters / tapped on touch screen         */
 /* ------------------------------------------------------------------ */
 const faceStyle = { backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" };
 
@@ -104,12 +101,11 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
         className={fill ? "absolute inset-0" : "relative h-full"}
         style={{ transformStyle: "preserve-3d" }}
         animate={{ rotateY: flip ? 180 : 0 }}
-        transition={{ duration: reduce ? 0.01 : touch ? 0.55 : 0.85, ease: EASE }}
+        transition={{ duration: reduce ? 0.01 : touch ? 0.4 : 0.7, ease: EASE }}
       >
         <div className={fill ? "absolute inset-0" : "h-full"} style={{ ...faceStyle, pointerEvents: flip ? "none" : "auto" }}>{front}</div>
         <div className="absolute inset-0" style={{ ...faceStyle, transform: "rotateY(180deg)", pointerEvents: flip ? "auto" : "none" }}>{back}</div>
       </motion.div>
-      {/* phones and tablets have no mouse hover, so this small button flips the card by tap */}
       {touch && (
         <button
           type="button"
@@ -126,15 +122,17 @@ function FlipCard({ as: Tag = "div", front, back, fill = false, className = "", 
 }
 
 /* ------------------------------------------------------------------ */
-/*  HERO                                                               */
+/*  HERO (Optimized Video Handler)                                     */
 /* ------------------------------------------------------------------ */
 function HeroVideo() {
   const [failed, setFailed] = useState(false);
   const reduce = useReducedMotion();
   const touch = useTouch();
   const conn = typeof navigator !== "undefined" ? navigator.connection : undefined;
-  // phones show the photo (a looping video makes small devices lag); desktops get the video
-  const skip = reduce || touch || conn?.saveData || failed;
+  
+  // Always fallback to image if mobile, reduced motion, data saver or video error
+  const skip = reduce || touch || conn?.saveData || conn?.effectiveType === '2g' || failed;
+  
   if (skip) {
     return <img src={biryani} alt="A plate of biryani served with sides" width="783" height="1020" fetchPriority="high" className="h-full w-full object-cover" />;
   }
@@ -147,7 +145,7 @@ function HeroVideo() {
       muted
       loop
       playsInline
-      preload="auto"
+      preload="metadata"
       aria-label="Freshly served dishes at Tasty Tasty Greenchilly"
       onError={() => setFailed(true)}
     />
@@ -174,82 +172,72 @@ function Hero() {
   const ref = useRef(null);
   const reduce = useReducedMotion();
   const touch = useTouch();
-  const calm = reduce || touch; // no scroll-parallax on phones
+  const calm = reduce || touch; 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const textY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : 90]);
-  const mediaY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : -50]);
-  const fade = useTransform(scrollYProgress, [0, 0.8], [1, calm ? 1 : 0.2]);
+  const textY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : 40]);
+  const mediaY = useTransform(scrollYProgress, [0, 1], [0, calm ? 0 : -20]);
 
   return (
-    <section ref={ref} className="relative isolate flex min-h-[100svh] items-center overflow-hidden bg-ink" aria-labelledby="hero-title">
-      {/* ambient background */}
-      <img src={interior} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full object-cover object-center opacity-30" />
-      <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-forest/50" aria-hidden="true" />
-      <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/70" aria-hidden="true" />
-      <div aria-hidden="true" className="pointer-events-none absolute -left-32 top-10 hidden h-96 w-96 rounded-full bg-violet/25 blur-[100px] md:block" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-1/4 hidden h-80 w-80 rounded-full bg-lime/15 blur-[100px] md:block" />
+    <section ref={ref} className="relative isolate flex min-h-[90svh] items-center overflow-hidden bg-ink" aria-labelledby="hero-title">
+      <img src={interior} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full object-cover object-center opacity-25" />
+      <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/90 to-forest/40" aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/60" aria-hidden="true" />
 
-      <div className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-5 pb-24 pt-28 sm:px-8 lg:grid-cols-12 lg:gap-12 lg:pb-20 lg:pt-32">
-        {/* LEFT: copy slides in from the left */}
-        <motion.div style={{ y: textY, opacity: fade }} className="lg:col-span-7">
-          <Slide from="left" distance={90} duration={1.4}>
+      <div className="relative mx-auto grid w-full max-w-7xl items-center gap-10 px-5 pb-20 pt-24 sm:px-8 lg:grid-cols-12 lg:gap-12 lg:py-28">
+        <motion.div style={{ y: textY }} className="lg:col-span-7">
+          <Slide from="left" distance={60} duration={1.2}>
             <p className="eyebrow flex items-center gap-3 text-lime">
               <span className="h-px w-10 bg-lime/70" />
-              <span className="sm:hidden">Indian · Chinese · Tandoor</span>
-              <span className="hidden sm:inline">Jatni · Indian · Chinese · Tandoor</span>
+              <span>Jatni · Indian · Chinese · Tandoor</span>
             </p>
           </Slide>
 
-          <h1 id="hero-title" className="mt-5 font-serif text-[2.8rem] font-semibold leading-[0.95] sm:mt-7 sm:text-7xl lg:text-[6.6rem]">
+          <h1 id="hero-title" className="mt-5 font-serif text-[2.6rem] font-semibold leading-[0.95] sm:mt-6 sm:text-6xl lg:text-[6rem]">
             <span className="block overflow-hidden pb-1">
-              <Slide from="left" distance={260} duration={1.8} delay={0.15} as="span" className="block">Bold Flavours.</Slide>
+              <Slide from="left" distance={150} duration={1.4} delay={0.1} as="span" className="block">Bold Flavours.</Slide>
             </span>
             <span className="block overflow-hidden pb-2">
-              <Slide from="right" distance={260} duration={1.9} delay={0.45} as="span" className="block">
+              <Slide from="right" distance={150} duration={1.5} delay={0.3} as="span" className="block">
                 <em className="text-lime-gradient pr-2 font-medium italic">Freshly Served.</em>
               </Slide>
             </span>
           </h1>
 
-          <Slide from="left" distance={110} duration={1.6} delay={0.7}>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/75 sm:mt-7 sm:text-xl">
+          <Slide from="left" distance={70} duration={1.3} delay={0.5}>
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-ivory/75 sm:mt-6 sm:text-xl">
               Explore Indian favourites, Chinese classics and tandoor-inspired flavours at {business.name}.
             </p>
           </Slide>
 
-          <Slide from="left" distance={110} duration={1.6} delay={0.9} className="mt-8 flex flex-wrap gap-3 sm:mt-10 sm:gap-4">
+          <Slide from="left" distance={70} duration={1.3} delay={0.7} className="mt-7 flex flex-wrap gap-3 sm:mt-8 sm:gap-4">
             <Link to="/menu" className="btn btn-lime">Explore Menu <ArrowRight size={16} /></Link>
             <a href={enquiryUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-ghost"><WhatsAppIcon size={16} /> Order on WhatsApp</a>
           </Slide>
 
-          <Slide from="left" distance={110} duration={1.6} delay={1.1} className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-ivory/65">
+          <Slide from="left" distance={70} duration={1.3} delay={0.9} className="mt-7 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-ivory/65">
             <span className="flex items-center gap-2"><MapPin size={16} className="text-lime" /> {business.address.line1}, Jatni</span>
             <span className="flex items-center gap-2"><Clock size={16} className="text-lime" /> Listed {business.hours.label}</span>
           </Slide>
         </motion.div>
 
-        {/* RIGHT: video arch slides in from the right */}
         <motion.div style={{ y: mediaY }} className="relative mx-auto w-full max-w-md lg:col-span-5 lg:max-w-none">
-          <Slide from="right" distance={220} duration={2} delay={0.3}>
+          <Slide from="right" distance={120} duration={1.6} delay={0.2}>
             <div className="relative mx-auto aspect-[4/5] w-[78%] sm:w-[68%] lg:w-[78%]">
               <div aria-hidden="true" className="absolute -inset-4 rounded-t-[999px] rounded-b-[2.5rem] border border-dashed border-lime/30" />
-              <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-3xl border border-lime/30 bg-forest shadow-[0_30px_60px_-20px_rgba(0,0,0,0.8)]">
+              <div className="absolute inset-0 overflow-hidden rounded-t-[999px] rounded-b-3xl border border-lime/30 bg-forest shadow-2xl">
                 <HeroVideo />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent" />
-                <div className="pointer-events-none absolute inset-0 rounded-t-[999px] rounded-b-3xl ring-1 ring-inset ring-ivory/10" />
               </div>
 
               <RotatingBadge />
 
-              {/* paneer card slides from the left */}
-              <Slide from="left" distance={160} duration={1.9} delay={1.2} className="absolute -left-6 bottom-12 w-40 sm:-left-14 sm:w-52">
+              <Slide from="left" distance={90} duration={1.4} delay={0.8} className="absolute -left-6 bottom-12 w-40 sm:-left-14 sm:w-52">
                 <div className="overflow-hidden rounded-2xl border border-ivory/25 shadow-2xl">
-                  <img src={paneer} alt="Paneer tikka served sizzling" width="800" height="457" loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                  <img src={paneer} alt="Paneer tikka" width="800" height="457" loading="lazy" className="aspect-[4/3] w-full object-cover" />
                 </div>
               </Slide>
 
-              {/* rating card slides from the right */}
-              <Slide from="right" distance={160} duration={1.9} delay={1.5} className="absolute -right-2 bottom-10 sm:-right-8">
+              <Slide from="right" distance={90} duration={1.4} delay={1} className="absolute -right-2 bottom-10 sm:-right-8">
                 <div className="glass rounded-2xl px-4 py-3">
                   <div className="flex items-center gap-1.5 text-lime"><Star size={14} fill="currentColor" /><span className="eyebrow !text-[0.6rem]">Google rated</span></div>
                   <p className="mt-1.5 font-serif text-2xl font-semibold leading-none">{business.rating.value}<span className="text-sm text-ivory/55"> / 5</span></p>
@@ -260,12 +248,6 @@ function Hero() {
           </Slide>
         </motion.div>
       </div>
-
-      {/* scroll cue */}
-      <motion.a href="#glance" aria-label="Scroll down" className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-1 text-ivory/50 hover:text-lime sm:flex" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.4, duration: 1 }}>
-        <span className="eyebrow !text-[0.6rem]">Scroll</span>
-        <motion.span animate={{ y: [0, 7, 0] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}><ChevronDown size={18} /></motion.span>
-      </motion.a>
     </section>
   );
 }
@@ -305,7 +287,7 @@ function Strip() {
       <div className="hairline" />
       <dl className="mx-auto grid max-w-7xl grid-cols-1 gap-3 px-5 py-8 min-[480px]:grid-cols-2 sm:gap-4 sm:px-8 sm:py-10 lg:grid-cols-4">
         {facts.map(({ k, v, big, unit, note, Icon, from, accent }, i) => (
-          <Slide key={k} from={from} distance={80} duration={1.2} delay={i * 0.08}
+          <Slide key={k} from={from} distance={60} duration={1} delay={i * 0.05}
             className={`relative min-w-0 overflow-hidden rounded-2xl border p-5 sm:p-6 ${accent ? "border-lime/40 bg-gradient-to-br from-lime/15 via-forest to-ink" : "border-ivory/10 bg-ink/45"}`}>
             <dt className="flex items-center gap-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lime/15 text-lime"><Icon size={19} strokeWidth={1.8} /></span>
@@ -334,7 +316,7 @@ function Strip() {
 /* ------------------------------------------------------------------ */
 function FeaturedBack({ item }) {
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-lime/30 bg-gradient-to-br from-heritage via-forest to-ink p-7 text-ivory shadow-[0_30px_70px_-35px_rgba(0,0,0,0.9)]">
+    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-lime/30 bg-gradient-to-br from-heritage via-forest to-ink p-7 text-ivory shadow-2xl">
       <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-lime/15 blur-3xl" aria-hidden="true" />
       <div className="relative">
         <p className="eyebrow flex items-center gap-2 text-lime"><Sparkles size={14} /> Chef's pick</p>
@@ -358,15 +340,15 @@ function Featured() {
   return (
     <section className="on-ivory overflow-x-clip bg-ivory py-24 text-charcoal sm:py-32" aria-labelledby="featured-title">
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <Slide from="left" distance={100}>
-          <SectionHeading light eyebrow="From the menu" title="Dishes to" accent="start with">
-            A few plates from our menu, each shown with a photograph of the dish itself. The full menu has {categories.reduce((n, c) => n + c.count, 0)} dishes across Indian, Chinese and tandoor.
+        <Slide from="left" distance={70}>
+          <SectionHeading eyebrow="From the menu" title="Dishes to" accent="start with">
+            A few plates from our menu, each shown with a photograph of the dish itself.
           </SectionHeading>
         </Slide>
         <h2 id="featured-title" className="sr-only">Featured dishes</h2>
         <div className="mt-16 grid gap-8 md:grid-cols-3">
           {items.map((it, i) => (
-            <Slide key={it.id} from={dirs[i % 3]} distance={130} duration={1.7} delay={i * 0.15}>
+            <Slide key={it.id} from={dirs[i % 3]} distance={80} duration={1.2} delay={i * 0.1}>
               <FlipCard front={<FeaturedDish item={it} />} back={<FeaturedBack item={it} />} />
             </Slide>
           ))}
@@ -380,7 +362,7 @@ function Featured() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  SIGNATURE: what makes the place different                          */
+/*  SIGNATURE                                                          */
 /* ------------------------------------------------------------------ */
 function Signature() {
   const pillars = [
@@ -391,18 +373,16 @@ function Signature() {
   ];
   return (
     <section className="relative overflow-hidden bg-forest py-24 sm:py-32" aria-labelledby="sig-title">
-      <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-lime/10 blur-[130px]" aria-hidden="true" />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
-        <Slide from="right" distance={100}>
+        <Slide from="right" distance={70}>
           <SectionHeading eyebrow="Why Greenchilly" title="Three cuisines," accent="one table" />
         </Slide>
         <h2 id="sig-title" className="sr-only">What makes us different</h2>
         <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {pillars.map(({ Icon, t, d }, i) => (
-            <Slide key={t} from={i % 2 === 0 ? "left" : "right"} distance={120} duration={1.7} delay={(i % 2) * 0.15}
+            <Slide key={t} from={i % 2 === 0 ? "left" : "right"} distance={80} duration={1.2} delay={(i % 2) * 0.1}
               className="group relative overflow-hidden rounded-3xl border border-lime/15 bg-ink/50 p-7 transition-colors duration-500 hover:border-lime/50">
-              <span className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-lime/10 blur-2xl" aria-hidden="true" />
-              <span className="relative grid h-14 w-14 place-items-center rounded-2xl bg-lime/15 text-lime transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-110"><Icon size={26} strokeWidth={1.6} /></span>
+              <span className="relative grid h-14 w-14 place-items-center rounded-2xl bg-lime/15 text-lime"><Icon size={26} strokeWidth={1.6} /></span>
               <h3 className="relative mt-6 font-serif text-2xl font-semibold">{t}</h3>
               <p className="relative mt-2 text-[0.95rem] leading-relaxed text-ivory/65">{d}</p>
             </Slide>
@@ -414,19 +394,15 @@ function Signature() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CATEGORIES: photo cards that flip on hover                         */
+/*  CATEGORIES                                                         */
 /* ------------------------------------------------------------------ */
 const pexels = (id) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=900&h=1100&fit=crop`;
-
-// Your own photos: put src/assets/cat-<category-id>.webp (or .jpg/.png) and it is used automatically
 const droppedPhotos = import.meta.glob("../assets/cat-*.{webp,jpg,jpeg,png}", { eager: true, import: "default" });
 const ownPhoto = (id) => {
   const hit = Object.entries(droppedPhotos).find(([p]) => p.includes(`/cat-${id}.`));
   return hit ? hit[1] : null;
 };
 
-// Works for any category name: the photo is picked by a keyword in the category name.
-// Save the file as src/assets/cat-<key>.webp (keys: roll, soup, starter-veg, mutton, egg, raita-papad, dal, bread, seafood)
 const keywordRules = [
   { test: /roll/, key: "roll" },
   { test: /soup/, key: "soup" },
@@ -438,13 +414,12 @@ const keywordRules = [
   { test: /bread|roti|naan|kulcha|paratha/, key: "bread" },
   { test: /raita|papad|salad/, key: "raita-papad" },
 ];
-// A category can match several rules (e.g. "Breads, Raita & Papad"): every match is kept, the first one that has a photo wins
+
 const rulesFor = (c) => {
   const text = `${c.id} ${c.name}`.toLowerCase();
   return keywordRules.filter((r) => r.test.test(text) && !(r.not && r.not.test(text)));
 };
 const keyPhotos = { roll: catRoll, soup: catSoup, "starter-veg": catStarterVeg, mutton: catMutton, egg: catEgg, "raita-papad": catRaitaPapad };
-// dal / bread / seafood: optional, drop src/assets/cat-dal.webp, cat-bread.webp, cat-seafood.webp when you have photos
 const keywordPhoto = (c) => { for (const r of rulesFor(c)) { const p = keyPhotos[r.key] || ownPhoto(r.key); if (p) return p; } return null; };
 const keywordIcon = (c) => {
   const k = rulesFor(c)[0]?.key;
@@ -484,43 +459,29 @@ function CategoryCard({ c, i }) {
   const sample = menuItems.filter((m) => m.categoryId === c.id && m.available !== false).slice(0, 4);
 
   const front = (
-    <div className="absolute inset-0 overflow-hidden rounded-3xl border border-lime/15 bg-forest shadow-[0_30px_70px_-35px_rgba(0,0,0,0.9)]">
+    <div className="absolute inset-0 overflow-hidden rounded-3xl border border-lime/15 bg-forest shadow-2xl">
       {src ? (
-        <motion.img
+        <img
           src={src}
-          alt={`${c.name} at Tasty Tasty Greenchilly`}
+          alt={c.name}
           loading="lazy"
           decoding="async"
           onError={() => setBad(true)}
-          initial={{ scale: reduce || touch ? 1 : 1.25 }}
-          whileInView={{ scale: 1 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 1.6, ease: EASE }}
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-heritage via-deep to-ink" aria-hidden="true">
-          <Icon className="absolute -right-6 top-1/4 h-56 w-56 -rotate-12 text-lime/15" strokeWidth={1} />
-          <span className="absolute left-1/4 top-1/3 h-40 w-40 rounded-full bg-lime/20 blur-[70px]" />
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-heritage via-deep to-ink" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" aria-hidden="true" />
-
-      <motion.span
-        className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-ink/75 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-[0.2em] text-lime"
-        animate={reduce || touch ? undefined : { y: [0, -5, 0] }}
-        transition={{ duration: 4 + (i % 3), repeat: Infinity, ease: "easeInOut" }}
-      >
+      <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
+      <span className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-ink/75 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-[0.2em] text-lime">
         <Icon size={14} /> {String(i + 1).padStart(2, "0")}
-      </motion.span>
-
+      </span>
       <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
         <h3 className="font-serif text-2xl font-semibold leading-tight drop-shadow sm:text-3xl">{c.name}</h3>
-        <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="mt-2 flex items-center justify-between">
           <p className="text-sm text-ivory/75">{c.count} dishes · from {inr(c.from)}</p>
-          <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-lime py-1.5 pl-4 pr-1.5 text-xs font-semibold uppercase tracking-widest text-ink shadow-[0_10px_30px_-8px_rgba(139,203,53,0.7)] sm:py-2 sm:pr-2">
-            View dishes
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-ink text-lime"><ArrowUpRight size={15} /></span>
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-lime py-1.5 pl-4 pr-1.5 text-xs font-semibold uppercase tracking-widest text-ink">
+            View <span className="grid h-7 w-7 place-items-center rounded-full bg-ink text-lime"><ArrowUpRight size={15} /></span>
           </span>
         </div>
       </div>
@@ -528,9 +489,7 @@ function CategoryCard({ c, i }) {
   );
 
   const back = (
-    <div className="relative flex h-full flex-col justify-between gap-4 overflow-hidden rounded-3xl border border-lime/40 bg-gradient-to-br from-heritage via-forest to-ink p-5 shadow-[0_35px_90px_-30px_rgba(139,203,53,0.4)] sm:p-7">
-      <Icon className="pointer-events-none absolute -right-8 -top-4 h-52 w-52 -rotate-12 text-lime/10" strokeWidth={1} aria-hidden="true" />
-      <span className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-lime/15 blur-3xl" aria-hidden="true" />
+    <div className="relative flex h-full flex-col justify-between gap-4 overflow-hidden rounded-3xl border border-lime/40 bg-gradient-to-br from-heritage via-forest to-ink p-5 sm:p-7">
       <div className="relative">
         <p className="eyebrow flex items-center gap-2 text-lime"><Icon size={14} /> {c.count} dishes · from {inr(c.from)}</p>
         <h3 className="mt-3 font-serif text-3xl font-semibold leading-tight">{c.name}</h3>
@@ -538,39 +497,26 @@ function CategoryCard({ c, i }) {
           <ul className="mt-5 space-y-2 border-t border-ivory/10 pt-5 text-[0.95rem] text-ivory/75">
             {sample.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${m.veg ? "bg-green-500" : "bg-red-500"}`} aria-hidden="true" /><span className="truncate">{m.name}</span></span>
+                <span className="flex min-w-0 items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${m.veg ? "bg-green-500" : "bg-red-500"}`} /><span className="truncate">{m.name}</span></span>
                 <span className="shrink-0 font-serif text-lime">{inr(m.price)}</span>
               </li>
             ))}
-            {c.count > sample.length && <li className="pt-1 text-sm text-ivory/45">+ {c.count - sample.length} more</li>}
           </ul>
         )}
       </div>
-      <span className="relative mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-lime py-2 pl-5 pr-2 text-xs font-semibold uppercase tracking-widest text-ink shadow-[0_10px_30px_-8px_rgba(139,203,53,0.7)]">
-        Open section
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-ink text-lime"><ArrowUpRight size={15} /></span>
+      <span className="relative inline-flex w-fit items-center gap-2 rounded-full bg-lime py-2 pl-5 pr-2 text-xs font-semibold uppercase tracking-widest text-ink">
+        Open section <span className="grid h-7 w-7 place-items-center rounded-full bg-ink text-lime"><ArrowUpRight size={15} /></span>
       </span>
     </div>
   );
 
   return (
-    <Slide from={i % 3 === 0 ? "left" : i % 3 === 2 ? "right" : "up"} distance={120} duration={1.8} delay={(i % 3) * 0.14}>
-      <FlipCard
-        as={Link}
-        to={`/menu?cat=${c.id}`}
-        fill
-        front={front}
-        back={back}
-        aria-label={`${c.name}: ${c.count} dishes, from ${inr(c.from)}`}
-        className="relative block aspect-[4/5] touch-manipulation rounded-3xl outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-lime/70"
-      />
+    <Slide from={i % 3 === 0 ? "left" : i % 3 === 2 ? "right" : "up"} distance={80} duration={1.2} delay={(i % 3) * 0.1}>
+      <FlipCard as={Link} to={`/menu?cat=${c.id}`} fill front={front} back={back} className="relative block aspect-[4/5] touch-manipulation rounded-3xl outline-none" />
     </Slide>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  DIRECT ORDER: gentle nudge away from delivery-app fees             */
-/* ------------------------------------------------------------------ */
 function DirectOrderBanner() {
   const perks = [
     { Icon: BadgePercent, t: "Straight from our kitchen", d: "Your order comes to us directly, with no delivery-app commission in between." },
@@ -578,8 +524,7 @@ function DirectOrderBanner() {
     { Icon: Flame, t: "Made fresh to order", d: "Every dish is cooked fresh once your order reaches the kitchen." },
   ];
   return (
-    <Slide from="up" distance={80} duration={1.4} className="relative mt-14 overflow-hidden rounded-[2rem] border border-lime/25 bg-gradient-to-br from-heritage/70 via-forest to-ink p-7 sm:mt-16 sm:p-10">
-      <span className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-lime/15 blur-[90px]" aria-hidden="true" />
+    <Slide from="up" distance={60} duration={1.2} className="relative mt-14 overflow-hidden rounded-[2rem] border border-lime/25 bg-gradient-to-br from-heritage/70 via-forest to-ink p-7 sm:mt-16 sm:p-10">
       <div className="relative grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
         <div>
           <p className="eyebrow flex items-center gap-2 text-lime"><BadgePercent size={14} /> Order direct</p>
@@ -614,10 +559,9 @@ function Categories() {
   const touch = useTouch();
   return (
     <section className="relative overflow-hidden bg-ink py-24 sm:py-32" aria-label="Menu categories">
-      <div className="pointer-events-none absolute right-0 top-0 hidden h-96 w-96 rounded-full bg-heritage/30 blur-[100px] md:block" aria-hidden="true" />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
-        <Slide from="left" distance={100}>
-          <SectionHeading eyebrow="The menu" title="Choose your" accent="craving">From tandoor starters to dum biryani, there is a section for every craving. {touch ? "Tap the flip button on a card to peek inside, or tap the card to jump straight in." : "Hover a card to peek inside, click to jump straight in."}</SectionHeading>
+        <Slide from="left" distance={70}>
+          <SectionHeading eyebrow="The menu" title="Choose your" accent="craving">From tandoor starters to dum biryani, there is a section for every craving.</SectionHeading>
         </Slide>
         <ul className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {categories.map((c, i) => <li key={c.id}><CategoryCard c={c} i={i} /></li>)}
@@ -628,27 +572,19 @@ function Categories() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  ATMOSPHERE                                                         */
-/* ------------------------------------------------------------------ */
 function Atmosphere() {
   return (
     <section className="relative overflow-x-clip bg-forest py-24 sm:py-32" aria-labelledby="atm-title">
       <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-12">
-        <Slide from="left" distance={200} duration={1.9} className="lg:col-span-7">
+        <Slide from="left" distance={100} duration={1.3} className="lg:col-span-7">
           <div className="relative">
-            <img src={interior} alt="Inside Tasty Tasty Greenchilly: green walls, colourful paintings, steel chairs with green seats and balloons on the ceiling" loading="lazy" width="1360" height="766"
-              className="aspect-[16/10] w-full rounded-[2rem] border border-lime/20 object-cover shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)]" />
-            <Slide from="right" distance={160} duration={2} delay={0.5} className="absolute -bottom-8 -right-3 hidden w-2/5 sm:block lg:-right-8">
-              <img src={aisle} alt="Rows of dining tables with green seats" loading="lazy" width="1000" height="449"
-                className="w-full rounded-2xl border-4 border-forest object-cover shadow-2xl" />
-            </Slide>
+            <img src={interior} alt="Inside restaurant" loading="lazy" width="1360" height="766" className="aspect-[16/10] w-full rounded-[2rem] border border-lime/20 object-cover shadow-2xl" />
           </div>
         </Slide>
-        <Slide from="right" distance={200} duration={1.9} delay={0.15} className="lg:col-span-5">
+        <Slide from="right" distance={100} duration={1.3} delay={0.1} className="lg:col-span-5">
           <p className="eyebrow flex items-center gap-2 text-lime"><Leaf size={14} /> The room</p>
           <h2 id="atm-title" className="mt-4 font-serif text-4xl font-semibold leading-[1.05] sm:text-5xl">A fresh green room, <em className="text-lime-gradient font-medium italic">made for sharing.</em></h2>
-          <p className="mt-6 text-lg leading-relaxed text-ivory/70">Leaf-green walls, stone-patterned panels, bold hand-painted art and soft violet accent lighting. It is a bright, easy space for family meals and get-togethers.</p>
+          <p className="mt-6 text-lg leading-relaxed text-ivory/70">Leaf-green walls, stone-patterned panels, bold hand-painted art and soft violet accent lighting. It is a bright, easy space for family meals.</p>
           <Link to="/about" className="btn btn-ghost mt-8">See the restaurant <ArrowRight size={16} /></Link>
         </Slide>
       </div>
@@ -656,12 +592,8 @@ function Atmosphere() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  RATING                                                             */
-/* ------------------------------------------------------------------ */
 function Rating() {
   const r = business.rating;
-  // Review link used by the "Write a review" button AND the QR code.
   const writeUrl = REVIEW_URL;
   const [qr, setQr] = useState("");
   useEffect(() => {
@@ -674,10 +606,8 @@ function Rating() {
   return (
     <section className="overflow-x-clip bg-ink py-20 sm:py-28" aria-labelledby="rating-title">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <Slide from="up" distance={60} duration={1.3} className="relative overflow-hidden rounded-[1.75rem] border border-lime/20 bg-gradient-to-br from-forest via-ink to-ink sm:rounded-[2rem]">
-          <div className="pointer-events-none absolute -right-24 -top-24 hidden h-72 w-72 rounded-full bg-lime/10 blur-[90px] md:block" aria-hidden="true" />
+        <Slide from="up" distance={50} duration={1.1} className="relative overflow-hidden rounded-[1.75rem] border border-lime/20 bg-gradient-to-br from-forest via-ink to-ink sm:rounded-[2rem]">
           <div className="relative grid gap-px bg-ivory/10 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)_auto]">
-            {/* score */}
             <div className="flex flex-col items-center justify-center bg-forest/80 p-8 text-center sm:p-10 lg:items-start lg:text-left">
               <p className="eyebrow flex items-center gap-2 text-lime"><Star size={14} fill="currentColor" /> Google rating</p>
               <p className="mt-4 font-serif text-7xl font-semibold leading-none text-lime-gradient sm:text-8xl">{r.value}</p>
@@ -685,29 +615,25 @@ function Rating() {
               <p className="mt-3 text-sm text-ivory/65">out of {r.outOf} · {r.count} reviews</p>
             </div>
 
-            {/* message + actions */}
             <div className="flex flex-col justify-center bg-ink/90 p-7 sm:p-10">
               <p className="eyebrow flex items-center gap-2 text-lime"><PenLine size={14} /> What guests say</p>
               <h2 id="rating-title" className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-4xl">
                 Enjoyed your meal? <em className="text-lime-gradient font-medium italic">Leave us a review.</em>
               </h2>
               <p className="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-ivory/65">
-                Your review takes less than a minute and helps other people in Jatni find us. Tap the button, or scan the code with another phone.
+                Your review takes less than a minute and helps other people in Jatni find us.
               </p>
-              <div className="mt-7 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:flex-wrap">
+              <div className="mt-7 flex flex-col gap-3 min-[480px]:flex-row">
                 <a href={writeUrl} target="_blank" rel="noopener noreferrer" className="btn btn-lime justify-center"><PenLine size={16} /> Write a review</a>
                 <a href={googleReviewsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost justify-center">Read reviews <ExternalLink size={15} /></a>
               </div>
-              <p className="mt-5 text-xs leading-relaxed text-ivory/40">Rating from the {r.source}; it can change over time.</p>
             </div>
 
-            {/* QR (hidden on small phones, where the button does the job) */}
             <div className="hidden flex-col items-center justify-center gap-3 bg-forest/80 p-8 sm:flex sm:p-10">
-              <div className="rounded-2xl bg-white p-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.8)]">
-                {qr ? <img src={qr} alt="QR code: scan to write a Google review for Tasty Tasty Greenchilly" width="176" height="176" className="h-44 w-44" /> : <span className="block h-44 w-44" />}
+              <div className="rounded-2xl bg-white p-3 shadow-2xl">
+                {qr ? <img src={qr} alt="QR code" width="176" height="176" className="h-44 w-44" /> : <span className="block h-44 w-44" />}
               </div>
               <p className="text-center text-sm font-medium text-ivory">Scan to review</p>
-              <p className="max-w-[11rem] text-center text-xs leading-snug text-ivory/50">Point your phone camera at the code</p>
             </div>
           </div>
         </Slide>
@@ -716,26 +642,21 @@ function Rating() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  HOW TO ORDER                                                       */
-/* ------------------------------------------------------------------ */
 function HowToOrder() {
   const steps = [
     { Icon: ListChecks, t: "Pick your dishes", d: "Browse the menu and add what you like. Change quantities any time.", from: "left" },
     { Icon: UserRound, t: "Share your details", d: "Add your name and number. Choose pickup, or delivery with your address.", from: "up" },
-    { Icon: Send, t: "Send on WhatsApp", d: "Your order opens in WhatsApp, ready to send. The restaurant confirms availability and the final amount.", from: "right" },
+    { Icon: Send, t: "Send on WhatsApp", d: "Your order opens in WhatsApp, ready to send. The restaurant confirms availability.", from: "right" },
   ];
   return (
     <section className="relative overflow-hidden bg-deep py-24 sm:py-28" aria-labelledby="order-title">
-      <div className="pointer-events-none absolute -left-20 bottom-0 h-80 w-80 rounded-full bg-lime/10 blur-[110px]" aria-hidden="true" />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
-        <Slide from="left" distance={100}><SectionHeading eyebrow="Direct ordering" title="Order in" accent="three steps" /></Slide>
+        <Slide from="left" distance={70}><SectionHeading eyebrow="Direct ordering" title="Order in" accent="three steps" /></Slide>
         <h2 id="order-title" className="sr-only">How to order</h2>
         <ol className="relative mt-16 grid gap-6 md:grid-cols-3">
-          <span className="pointer-events-none absolute left-[16%] right-[16%] top-[3.7rem] hidden h-px bg-gradient-to-r from-transparent via-lime/40 to-transparent md:block" aria-hidden="true" />
           {steps.map(({ Icon, t, d, from }, i) => (
-            <Slide as="li" key={t} from={from} distance={130} duration={1.7} delay={i * 0.15} className="group relative rounded-3xl border border-ivory/10 bg-ink/40 p-8 transition-colors duration-500 hover:border-lime/40">
-              <div className="flex items-center justify-between"><span className="grid h-12 w-12 place-items-center rounded-full bg-lime/15 text-lime transition-transform duration-500 group-hover:scale-110"><Icon size={22} /></span><span className="font-serif text-5xl italic text-ivory/15">{i + 1}</span></div>
+            <Slide as="li" key={t} from={from} distance={80} duration={1.2} delay={i * 0.1} className="group relative rounded-3xl border border-ivory/10 bg-ink/40 p-8">
+              <div className="flex items-center justify-between"><span className="grid h-12 w-12 place-items-center rounded-full bg-lime/15 text-lime"><Icon size={22} /></span><span className="font-serif text-5xl italic text-ivory/15">{i + 1}</span></div>
               <h3 className="mt-6 font-serif text-2xl font-semibold">{t}</h3>
               <p className="mt-2 text-[0.95rem] leading-relaxed text-ivory/65">{d}</p>
             </Slide>
@@ -747,27 +668,23 @@ function HowToOrder() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  VISIT                                                              */
-/* ------------------------------------------------------------------ */
 function VisitTeaser() {
   return (
     <section className="overflow-x-clip bg-ink py-24 sm:py-32" aria-labelledby="visit-title">
       <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-2 lg:items-center">
-        <Slide from="left" distance={180} duration={1.8}>
+        <Slide from="left" distance={100} duration={1.3}>
           <p className="eyebrow flex items-center gap-2 text-lime"><MapPin size={14} /> Visit us</p>
           <h2 id="visit-title" className="mt-4 font-serif text-5xl font-semibold leading-[1.02] sm:text-6xl">Find us in <em className="text-lime-gradient font-medium italic">Jatni.</em></h2>
           <address className="mt-8 not-italic leading-relaxed text-ivory/75">
             <p className="font-serif text-2xl text-ivory">{business.name}</p>
             <p className="mt-2">{business.address.line1}</p><p>{business.address.line2}</p>
-            <p className="mt-1 text-sm text-ivory/50">Plus code {business.address.plusCode}</p>
           </address>
           <div className="mt-8 flex flex-wrap gap-4">
             <a href={mapsDirectionsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-lime"><Navigation size={16} /> Get directions</a>
             <a href={`tel:${business.contact.phoneTel}`} className="btn btn-ghost"><Phone size={16} /> Call</a>
           </div>
         </Slide>
-        <Slide from="right" distance={180} duration={1.8} delay={0.15} className="glass rounded-[2rem] p-8 sm:p-10">
+        <Slide from="right" distance={100} duration={1.3} delay={0.1} className="glass rounded-[2rem] p-8 sm:p-10">
           <p className="eyebrow flex items-center gap-2 text-lime"><Clock size={14} /> Opening hours</p>
           <p className="mt-4 font-serif text-5xl font-semibold">{business.hours.label}</p>
           <p className="mt-4 text-sm leading-relaxed text-ivory/60">{business.hours.note}</p>
