@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import Navbar from "./components/Navbar.jsx";
 import Footer from "./components/Footer.jsx";
 import CartDrawer from "./components/CartDrawer.jsx";
 import MobileCartBar from "./components/MobileCartBar.jsx";
 import Home from "./pages/Home.jsx";
-import ChatAssistant from "./components/ChatAssistant.jsx"; // <-- ChatAssistant import kar liya hai (path apne folder structure ke hisaab se check kar lena)
+import ChatAssistant from "./components/ChatAssistant.jsx";
 
 const Menu = lazy(() => import("./pages/Menu.jsx"));
 const About = lazy(() => import("./pages/About.jsx"));
@@ -22,7 +23,6 @@ function RouteEffects() {
       if (el) { el.scrollIntoView(); return; }
     }
     window.scrollTo(0, 0);
-    // Move focus to the new page for keyboard / screen-reader users
     const main = document.getElementById("main");
     if (main && pathname) main.focus({ preventScroll: true });
   }, [pathname, hash]);
@@ -33,7 +33,7 @@ const Fallback = () => <div className="min-h-[70vh]" aria-busy="true" aria-label
 
 export default function App() {
   const { pathname } = useLocation();
-  const bare = pathname === "/checkout"; // checkout is a clean full page: no navbar, footer, chat
+  const bare = pathname === "/checkout";
   return (
     <div className="flex min-h-screen flex-col bg-ink text-ivory">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-lime focus:px-5 focus:py-3 focus:text-ink">
@@ -57,7 +57,8 @@ export default function App() {
       {!bare && <Footer />}
       {!bare && <MobileCartBar />}
       <CartDrawer />
-      {!bare && <ChatAssistant />} {/* <-- Yahan floating AI Assistant component add kar diya hai */}
+      {!bare && <ChatAssistant />}
+      <SpeedInsights />
     </div>
   );
 }
