@@ -22,7 +22,12 @@ export default function CartDrawer() {
   useDialog(open, closeCart, panel);
   const belowMin = paymentConfig.minimumOrder > 0 && subtotal < paymentConfig.minimumOrder;
 
-  const checkout = () => { closeCart(); navigate("/checkout"); };
+  const checkout = () => { 
+    closeCart(); 
+    setTimeout(() => {
+      navigate("/checkout");
+    }, 50); 
+  };
 
   return (
     <AnimatePresence>
