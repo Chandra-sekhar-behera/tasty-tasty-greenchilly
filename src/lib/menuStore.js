@@ -15,6 +15,7 @@ const adminConfig = siteConfig.adminConfig || { cloudUrl: "", localPin: "admin12
 const KEY = "greenchilly-menu-v2";
 const DIRTY = "greenchilly-menu-dirty"; // local edits not yet pushed to cloud
 const REV = "greenchilly-menu-rev";     // which cloud version this browser's copy is based on
+
 const getRev = () => { try { return localStorage.getItem(REV) || ""; } catch { return ""; } };
 const setRev = (v) => { try { localStorage.setItem(REV, String(v ?? "")); } catch { /* ignore */ } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -79,12 +80,15 @@ function commit(items, { persist = true } = {}) {
   derive(items);
   version++;
   if (persist) {
-    try { localStorage.setItem(KEY, JSON.stringify(items.map(({ image, ...rest }) => (image && image !== defaultById[rest.id]?.image ? { ...rest, image } : rest)))); } catch { /* storage full/blocked */ }
+    try { 
+      localStorage.setItem(KEY, JSON.stringify(items.map(({ image, ...rest }) => (image && image !== defaultById[rest.id]?.image ? { ...rest, image } : rest)))); 
+    } catch { /* storage full/blocked */ }
   }
   listeners.forEach((l) => l());
 }
 
 const subscribe = (l) => { listeners.add(l); return () => listeners.delete(l); };
+
 /** Call once at the top of any page/component that renders menu data so it re-renders on change. */
 export const useMenuVersion = () => useSyncExternalStore(subscribe, () => version);
 
@@ -103,7 +107,7 @@ if (typeof window !== "undefined") {
 const markDirty = (v) => {
   const was = isDirty();
   try { v ? localStorage.setItem(DIRTY, "1") : localStorage.removeItem(DIRTY); } catch { /* ignore */ }
-  if (was !== Boolean(v)) { version++; listeners.forEach((l) => l()); } // so the admin bar updates the moment a save finishes
+  if (was !== Boolean(v)) { version++; listeners.forEach((l) => l()); }
 };
 export const isDirty = () => { try { return localStorage.getItem(DIRTY) === "1"; } catch { return false; } };
 
@@ -124,6 +128,7 @@ export const setAdminPin = (p) => { adminPin = p || ""; };
 let pub = { state: "idle", msg: "" };
 export const publishState = () => pub;
 const setPub = (state, msg) => { pub = { state, msg }; version++; listeners.forEach((l) => l()); };
+
 let pubTimer = null, publishing = false, again = false;
 function schedulePublish() {
   if (!cloudEnabled() || !adminPin) return;
@@ -159,17 +164,14 @@ async function loadBitmap(file) {
   });
 }
 
-/** Google Sheets allows 50,000 characters in one cell, so a photo is shrunk until its text form fits under this. */
 const PHOTO_LIMIT = 44000;
-/** A photo we can keep: a normal https link (older photos on Drive) or a small inline JPEG stored in the Sheet itself. */
-export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/i.test(String(v || ""));
+export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/.test(String(v || ""));
 
-/** Centre-crops to the 4:3 shape the menu cards use, then shrinks it until it fits in one Sheet cell. Returns a JPEG data URL. */
 async function compressToFit(file) {
   const bmp = await loadBitmap(file);
   const sw0 = bmp.width || bmp.naturalWidth, sh0 = bmp.height || bmp.naturalHeight;
-  let sw = sw0, sh = sw0 * 0.75;                       // try full width at 4:3
-  if (sh > sh0) { sh = sh0; sw = sh0 / 0.75; }         // too tall -> use full height instead
+  let sw = sw0, sh = sw0 * 0.75;                       
+  if (sh > sh0) { sh = sh0; sw = sh0 / 0.75; }         
   const sx = (sw0 - sw) / 2, sy = (sh0 - sh) / 2;
   try {
     for (const width of [560, 480, 420, 360, 300, 240]) {
@@ -177,7 +179,7 @@ async function compressToFit(file) {
       const c = document.createElement("canvas");
       c.width = w; c.height = h;
       const g = c.getContext("2d");
-      g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);    // PNGs with transparency
+      g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);    
       g.imageSmoothingQuality = "high";
       g.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
       for (const q of [0.72, 0.62, 0.52, 0.42, 0.32]) {
@@ -189,10 +191,6 @@ async function compressToFit(file) {
   throw new Error("This photo is too detailed to store. Please try a simpler or smaller picture.");
 }
 
-/**
- * Crops + shrinks the picture and keeps it right inside the menu data (the Google Sheet), so it needs no Drive link
- * and no extra script feature. With cloud on, it is published straight away. Returns { published }.
- */
 export async function setItemPhoto(id, file, pin, onStep = () => {}) {
   if (!file || !/^image\//.test(file.type)) throw new Error("Please choose an image file (JPG, PNG or WebP).");
   if (file.size > 25 * 1024 * 1024) throw new Error("Image is too large (max 25 MB).");
@@ -208,7 +206,6 @@ export async function setItemPhoto(id, file, pin, onStep = () => {}) {
   return { published: true };
 }
 
-/** Removes the uploaded photo (the bundled one, if any, comes back) and publishes if cloud is on. */
 export async function removePhoto(id, pin) {
   updateItem(id, { image: undefined }, { publish: false });
   if (cloudEnabled()) await saveToCloud(pin);
@@ -226,13 +223,9 @@ async function fetchMenu(timeout) {
 }
 
 let loadingCloud = false;
-/**
- * Loads the live menu. Google scripts that were idle for hours start slowly ("cold start"),
- * so we wait longer and retry instead of giving up and showing the old default menu.
- */
 export async function loadFromCloud({ force = false } = {}) {
   const url = adminConfig.cloudUrl;
-  if (!url || (!force && (isDirty() || loadingCloud))) return false; // never overwrite unsaved admin edits
+  if (!url || (!force && (isDirty() || loadingCloud))) return false; 
   loadingCloud = true;
   try {
     let data = null;
@@ -241,7 +234,7 @@ export async function loadFromCloud({ force = false } = {}) {
       try { data = await fetchMenu(waits[i]); } catch { if (i < waits.length - 1) await sleep(1500 * (i + 1)); }
     }
     if (!data) return false;
-    if (!force && isDirty()) return false; // admin edited while we were fetching: keep their edit
+    if (!force && isDirty()) return false; 
     const items = clean(data.items);
     if (!items) return false;
     setRev(data.rev || "");
@@ -251,14 +244,11 @@ export async function loadFromCloud({ force = false } = {}) {
   } finally { loadingCloud = false; }
 }
 
-
-/* ---------------- photo fallback (when the Drive link itself will not open) ---------------- */
 export const driveId = (url) => (/^https:\/\/lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/.exec(String(url || "")) || [])[1] || "";
 const photoCache = new Map();
 let photoWhy = "";
-/** Plain-words reason the last photo fetch through the script failed. */
 export const photoProblem = () => photoWhy;
-/** Asks your Google script for the photo itself (it can always read its own Drive folder). Returns a data: URL or "". */
+
 export async function fetchDrivePhoto(id) {
   photoWhy = "";
   if (photoCache.has(id)) return photoCache.get(id);
@@ -270,39 +260,39 @@ export async function fetchDrivePhoto(id) {
   try {
     const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}action=img&id=${encodeURIComponent(id)}`, { signal: withTimeout(40000) });
     data = await res.json();
-  } catch { photoWhy = "The Google script did not answer. Deploy it again: Deploy > Manage deployments > pencil > New version > Deploy (Who has access = Anyone)."; return ""; }
+  } catch { photoWhy = "The Google script did not answer. Deploy it again."; return ""; }
   if (data?.ok && /^data:image\/(jpeg|png|webp);base64,/.test(data.data || "")) {
     photoCache.set(id, data.data);
     try { sessionStorage.setItem(ck, data.data); } catch { /* ignore */ }
     return data.data;
   }
-  if (data?.ok) photoWhy = "The Google script is still the OLD one (no photo support). Paste Code-final.gs and deploy a New version.";
-  else if (data?.error === "not a menu photo") photoWhy = "That file is not inside the Drive folder \"Greenchilly Dish Photos\".";
-  else if (data?.error === "not found") photoWhy = "The script cannot find that file in Drive (it was deleted, or Google needs you to re-allow permissions: run any function once in Apps Script and press Allow).";
+  if (data?.ok) photoWhy = "The Google script is still the OLD one (no photo support).";
+  else if (data?.error === "not a menu photo") photoWhy = "That file is not inside the Drive folder.";
+  else if (data?.error === "not found") photoWhy = "The script cannot find that file in Drive.";
   else photoWhy = `The script said: ${data?.error || "unknown error"}.`;
   return "";
 }
 
-const CLOUD_HELP = "Cannot reach your Google script. In Apps Script: Deploy > Manage deployments > Edit (pencil) > Who has access = Anyone > Version = New version > Deploy. Also make sure the URL ends with /exec.";
+const CLOUD_HELP = "Cannot reach your Google script. Check deployment settings (Who has access = Anyone, New version).";
 async function post(body) {
   let res;
   try {
     res = await fetch(adminConfig.cloudUrl, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids a CORS pre-flight; Apps Script reads it as text
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
       signal: withTimeout(30000),
     });
-  } catch { throw new Error(CLOUD_HELP); } // CORS / network / not public: Google returned a page instead of JSON
+  } catch { throw new Error(CLOUD_HELP); }
   try { return await res.json(); } catch { throw new Error(CLOUD_HELP); }
 }
-export const cloudEnabled = () => Boolean(adminConfig.cloudUrl);
-export const BUILD = "sticky-v10"; // shown in Admin so you can confirm the new files are really deployed
 
-/** Asks the Google script what it really holds, and explains in plain words if it cannot be reached. */
+export const cloudEnabled = () => Boolean(adminConfig.cloudUrl);
+export const BUILD = "sticky-v10-optimized";
+
 export async function testCloud() {
   const url = adminConfig.cloudUrl;
-  if (!url) throw new Error("Cloud URL is EMPTY in this build (src/config/business.js > adminConfig.cloudUrl). The site is running in 'this browser only' mode, so nothing can reach other visitors. Paste the /exec URL there and redeploy.");
+  if (!url) throw new Error("Cloud URL is EMPTY in business.js.");
   let res;
   try { res = await fetch(`${url}${url.includes("?") ? "&" : "?"}action=menu&_=${Date.now()}`, { signal: withTimeout(15000) }); }
   catch { throw new Error(CLOUD_HELP); }
@@ -311,31 +301,31 @@ export async function testCloud() {
   const items = Array.isArray(data?.items) ? data.items : [];
   return { dishes: items.length, photos: items.filter((r) => isPhoto(r.image)).length };
 }
+
 export async function verifyPin(pin) {
   if (!cloudEnabled()) return pin === adminConfig.localPin;
-  return (await post({ action: "auth", key: pin })).ok === true; // throws a readable error if the cloud is unreachable
+  return (await post({ action: "auth", key: pin })).ok === true;
 }
-/** All saves go one after another (never two at once), so each one carries the newest revision. */
+
 let saveChain = Promise.resolve();
 export function saveToCloud(pin) {
   const run = saveChain.then(() => saveToCloudNow(pin), () => saveToCloudNow(pin));
   saveChain = run.catch(() => {});
   return run;
 }
+
 async function saveToCloudNow(pin) {
-  // Photos live inside the menu data itself (small inline JPEG or an older https link). Anything too big for a cell is left out.
   const rows = menuItems.map(({ image, categoryId, ...r }) => ({ ...r, image: isPhoto(image) && String(image).length <= 48000 ? image : "" }));
-  if (!rows.length) throw new Error("The menu is empty, so nothing was saved (your cloud menu is safe).");
+  if (!rows.length) throw new Error("The menu is empty, so nothing was saved.");
   const data = await post({ action: "save", key: pin, baseRev: getRev(), items: rows });
   if (!data.ok) throw new Error(data.error || "Cloud save failed");
   setRev(data.rev || "");
   markDirty(false);
-  // Read it back the way a visitor would, so the admin can SEE what is really live.
   let back;
   try {
     const url = adminConfig.cloudUrl;
     back = await (await fetch(`${url}${url.includes("?") ? "&" : "?"}action=menu&_=${Date.now()}`, { signal: withTimeout(15000) })).json();
-  } catch { throw new Error("Saved, but could not read the menu back from the cloud. Check the Apps Script deployment (Who has access = Anyone, New version)."); }
+  } catch { throw new Error("Saved, but could not read the menu back from the cloud."); }
   const live = Array.isArray(back?.items) ? back.items : [];
   return {
     sentDishes: rows.length, sentPhotos: rows.filter((r) => r.image).length,
@@ -343,10 +333,9 @@ async function saveToCloudNow(pin) {
   };
 }
 
-// Public visitors pick up the latest cloud menu on every page load.
 if (typeof window !== "undefined") {
   loadFromCloud();
   const refresh = () => { if (document.visibilityState === "visible") loadFromCloud(); };
   document.addEventListener("visibilitychange", refresh);
-  setInterval(refresh, 180000); // open pages pick up admin changes within about 3 minutes
+  setInterval(refresh, 180000);
 }

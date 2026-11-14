@@ -18,14 +18,22 @@
 
 :root { color-scheme: dark; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { 
+  scroll-behavior: smooth; 
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--color-ink);
   color: var(--color-ivory);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  overscroll-behavior-y: none; /* Prevents pull-to-refresh bounce lag on custom mobile layouts */
+  -webkit-overflow-scrolling: touch; /* Momentum scrolling for mobile browsers */
 }
+
 ::selection { background: var(--color-lime); color: var(--color-ink); }
 main:focus { outline: none; }
 
@@ -91,10 +99,22 @@ main:focus { outline: none; }
 @keyframes drift { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -10px, 0); } }
 .drift { animation: drift 8s ease-in-out infinite; }
 
-.scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
-.scroll-hide::-webkit-scrollbar { display: none; }
+/* ---------- scroll & performance helpers ---------- */
+.scroll-hide, .no-scrollbar { 
+  scrollbar-width: none; 
+  -ms-overflow-style: none; 
+}
+.scroll-hide::-webkit-scrollbar, 
+.no-scrollbar::-webkit-scrollbar { 
+  display: none; 
+}
 
 .no-scroll { overflow: hidden; }
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -111,5 +131,3 @@ body > iframe:last-child {
   opacity: 0 !important;
   pointer-events: none !important;
 }
-
-

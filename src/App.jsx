@@ -5,9 +5,9 @@ import Navbar from "./components/Navbar.jsx";
 import Footer from "./components/Footer.jsx";
 import CartDrawer from "./components/CartDrawer.jsx";
 import MobileCartBar from "./components/MobileCartBar.jsx";
-import Home from "./pages/Home.jsx";
 import ChatAssistant from "./components/ChatAssistant.jsx";
 
+const Home = lazy(() => import("./pages/Home.jsx"));
 const Menu = lazy(() => import("./pages/Menu.jsx"));
 const About = lazy(() => import("./pages/About.jsx"));
 const VisitUs = lazy(() => import("./pages/VisitUs.jsx"));

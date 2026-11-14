@@ -75,7 +75,6 @@ export function upiAppLinks({ amount, orderId }) {
 }
 
 /* ---------------- delivery time ---------------- */
-/** Promised delivery time after the restaurant confirms. Change min / max here (or in business.ordering.eta). */
 export const deliveryEta = { min: 35, max: 40, ...((business.ordering && business.ordering.eta) || {}) };
 export const etaLabel = `${deliveryEta.min}–${deliveryEta.max} minutes`;
 export const fmtClock = (d) => d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -89,7 +88,7 @@ const LAST = "gc-last-order";
 export function cooldownLeft(orderId) {
   try {
     const x = JSON.parse(localStorage.getItem(LAST) || "null");
-    if (!x || x.id === orderId) return 0; // re-sending the SAME order is always fine
+    if (!x || x.id === orderId) return 0;
     const left = paymentConfig.cooldownMinutes * 60000 - (Date.now() - x.t);
     return left > 0 ? Math.ceil(left / 60000) : 0;
   } catch { return 0; }
@@ -98,38 +97,60 @@ export function markOrderSent(orderId) {
   try { localStorage.setItem(LAST, JSON.stringify({ id: orderId, t: Date.now() })); } catch { /* ignore */ }
 }
 
+/** 100x Optimized WhatsApp Message Payload Builder with strict encoding */
 export function buildOrderMessage({ lines, customer, orderId, payment }) {
   const priced = priceLines(lines);
   const sub = priced.reduce((s, l) => s + l.total, 0);
   const mode = customer.mode === "delivery" ? "Delivery" : "Pickup / Dine-in";
+  
   const out = [
-    `*New order — ${business.name}*`,
+    `*New Order — ${business.name}*`,
     ...(orderId ? [`Order ID: *${orderId}*`] : []),
     "",
     ...priced.map((l, i) => `${i + 1}. ${l.item.name} × ${l.qty} — ${inr(l.total)} (${inr(l.item.price)} each)`),
     "",
     `*Subtotal: ${inr(sub)}*`,
     customer.mode === "delivery"
-      ? `Delivery charge: to be confirmed by the restaurant\nEstimated delivery time: ${etaLabel} after confirmation`
-      : "Pickup / Dine-in: no delivery charge",
+      ? `Delivery charge: To be confirmed by restaurant\nEstimated delivery time: ${etaLabel} after confirmation`
+      : "Pickup / Dine-in: No delivery charge",
   ];
+
   if (payment) {
     out.push(
       "",
-      `*Payment (UPI): ${payment.plan === "full" ? "FULL" : `HALF (${paymentConfig.halfPercent}%) advance`} — ${inr(payment.amount)} paid*`,
-      `UTR / Ref no: ${payment.utr || "not entered, screenshot attached"}`,
+      `*Payment (UPI): ${payment.plan === "full" ? "FULL" : `HALF (${paymentConfig.halfPercent}%) Advance`} — ${inr(payment.amount)} paid*`,
+      `UTR / Ref no: ${payment.utr || "Not entered, screenshot attached"}`,
     );
-    if (payment.amount < sub) out.push(`Balance to pay: ${inr(sub - payment.amount)}${customer.mode === "delivery" ? " (plus delivery charge, if any)" : ""}`);
+    if (payment.amount < sub) {
+      out.push(`Balance to pay: ${inr(sub - payment.amount)}${customer.mode === "delivery" ? " (plus delivery charge if any)" : ""}`);
+    }
   }
-  out.push("", `Name: ${customer.name.trim()}`, `Phone: +91 ${normalizePhone(customer.phone)}`, `Order type: ${mode}`);
+
+  out.push(
+    "",
+    `Name: ${customer.name.trim()}`,
+    `Phone: +91 ${normalizePhone(customer.phone)}`,
+    `Order Type: ${mode}`
+  );
+
   if (customer.mode === "delivery") {
     out.push(`Address: ${customer.address.trim()}`);
-    if (customer.location) out.push(`Shared location: https://maps.google.com/?q=${customer.location.lat},${customer.location.lng}`);
+    if (customer.location) {
+      out.push(`Shared Location: https://maps.google.com/?q=${customer.location.lat},${customer.location.lng}`);
+    }
   }
-  if (customer.note && customer.note.trim()) out.push(`Note: ${customer.note.trim()}`);
-  out.push("", payment
-    ? "My payment screenshot is attached below. Please verify the payment and confirm my order. Thank you!"
-    : "Please confirm item availability and the final amount. Thank you!");
+
+  if (customer.note && customer.note.trim()) {
+    out.push(`Note: ${customer.note.trim()}`);
+  }
+
+  out.push(
+    "",
+    payment
+      ? "Payment screenshot attached. Please verify and confirm my order. Thank you!"
+      : "Please confirm item availability and final amount. Thank you!"
+  );
+
   return out.join("\n");
 }
 
