@@ -720,16 +720,20 @@ const EtaCard = memo(function EtaCard({ delivery, km }) {
       className="relative overflow-hidden rounded-2xl border border-lime/30 bg-gradient-to-br from-heritage/80 via-forest to-ink p-5 sm:p-6"
     >
       <span className="pointer-events-none absolute -right-10 -top-10 hidden h-44 w-44 rounded-full bg-lime/15 blur-3xl md:block" aria-hidden="true" />
-      <div className="relative flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="eyebrow flex items-center gap-1.5 text-lime"><Clock size={13} /> {delivery ? "Estimated delivery" : "Estimated ready time"}</p>
+      <div className="relative flex flex-col sm:flex-row items-center justify-between gap-5">
+        <div className="min-w-0 flex-1 text-center sm:text-left">
+          <p className="eyebrow inline-flex items-center justify-center sm:justify-start gap-1.5 text-lime"><Clock size={13} /> {delivery ? "Estimated delivery" : "Estimated ready time"}</p>
           <p className="mt-1 font-serif text-4xl font-semibold leading-none text-lime sm:text-5xl">{delivery ? etaLabel : "~20 min"}</p>
           <p className="mt-2 text-sm text-ivory/65">{delivery ? "after the restaurant confirms your order" : "we will confirm the exact time on WhatsApp"}</p>
           {delivery && km != null && (
             <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-lime/30 bg-ink/50 px-3 py-1.5 text-xs font-medium text-ivory/85"><Navigation size={13} className="text-lime" /> {km.toFixed(1)} km from the kitchen</span>
           )}
         </div>
-        {delivery && <LottieEmbed className="h-28 w-28 shrink-0 sm:h-36 sm:w-36" />}
+        {delivery && (
+          <div className="flex shrink-0 items-center justify-center rounded-2xl bg-ink/40 p-3 sm:bg-transparent sm:p-0">
+            <LottieEmbed className="h-40 w-40 sm:h-48 sm:w-48 drop-shadow-md" />
+          </div>
+        )}
       </div>
       <RouteStrip delivery={delivery} />
     </motion.div>
