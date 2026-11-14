@@ -50,7 +50,6 @@ function cartText(lines) {
 }
 
 function buildSystemInstruction(cartLines) {
-  const pay = business.payment || {};
   return `You are the virtual Robot Chef host of "${business.name}", a family restaurant at ${business.address.line1}, ${business.address.line2}. Cuisines: ${business.cuisines.join(", ")}.
 
 YOUR JOB: help guests explore the menu, choose dishes, and place an order. You know the COMPLETE menu below (${menuItems.length} dishes, grouped by category).
@@ -220,12 +219,21 @@ async function fetchWithFallback(contents, cartLines) {
 
 const ORDER_RE = /\b(order|book|parcel|delivery|deliver|chahiye|chaiye|mangwa|mangwana|manga|lena hai|karna hai|bhej|pickup|takeaway)\b/i;
 
-function whatsappText(name, phone, requirement) {
+// Improved WhatsApp Order Message Format with cart breakdown and subtotal
+function whatsappCartText(name, phone, lines, subtotal, requirement) {
+  const itemsList = lines.length > 0 
+    ? lines.map((l) => {
+        const dish = menuById[l.id];
+        return `▫️ ${dish ? dish.name : 'Dish'} (x${l.qty}) - ${inr((dish?.price || 0) * l.qty)}`;
+      }).join("\n")
+    : `▫️ ${requirement || "Food order enquiry"}`;
+
   return (
-    `🌶️ *NEW ENQUIRY FROM ${business.name.toUpperCase()} WEBSITE* 🌶️\n\n` +
-    `👤 *Name:* ${name}\n` +
-    `📞 *Phone:* ${phone}\n` +
-    `💬 *Requirement:* ${requirement || "Food order enquiry"}\n\n` +
+    `🌶️ *NEW ORDER / ENQUIRY - ${business.name.toUpperCase()}* 🌶️\n\n` +
+    `👤 *Customer Name:* ${name}\n` +
+    `📞 *Phone Number:* ${phone}\n\n` +
+    `🛒 *Order Items:* \n${itemsList}\n\n` +
+    `💰 *Subtotal Amount:* *${inr(subtotal)}*\n\n` +
     `_Sent via ${business.shortName} Robot Chef Assistant_`
   );
 }
@@ -265,7 +273,7 @@ function DishRow({ id, cart, orderOpen }) {
   );
 }
 
-function ConfirmSend({ onNo, onYes }) {
+function ConfirmSend({ onNo, onYes, lines, subtotal }) {
   const noRef = useRef(null);
   useEffect(() => { noRef.current?.focus(); }, []);
   return (
@@ -278,12 +286,14 @@ function ConfirmSend({ onNo, onYes }) {
         className="relative w-full max-w-xs overflow-hidden rounded-3xl border border-lime/30 bg-forest p-6 text-center shadow-2xl"
       >
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-lime/15 text-lime ring-1 ring-lime/40">
-          <img src={robotChefIcon} alt="Robot Chef" className="h-8 w-8 object-contain" />
+          <img src={robotChefIcon} alt="Robot Chef" className="h-8 w-8 object-contain animate-bounce" />
         </span>
         <h3 id="chat-confirm-title" className="mt-4 font-serif text-2xl font-semibold">Send this order?</h3>
-        <p className="mt-2 text-sm leading-relaxed text-ivory/70">Are you sure you want to send your order to {business.shortName} on WhatsApp?</p>
+        <p className="mt-2 text-sm leading-relaxed text-ivory/70">
+          {lines.length > 0 ? `Subtotal: ${inr(subtotal)}` : ''} Are you sure you want to send your order to {business.shortName} on WhatsApp?
+        </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button ref={noRef} type="button" onClick={onNo} className="btn btn-ghost justify-center"><X size={16} /> No</button>
+          <button ref={noRef} type="button" onClick={noRef ? onNo : undefined} className="btn btn-ghost justify-center"><X size={16} /> No</button>
           <button type="button" onClick={onYes} className="btn btn-lime justify-center"><Check size={16} /> Yes, send</button>
         </div>
       </motion.div>
@@ -436,7 +446,8 @@ export default function ChatAssistant() {
   const confirmAndOpenWhatsApp = () => {
     setConfirm(false);
     if (!status.open) { push({ role: "model", text: closedText() }); return; }
-    const url = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(whatsappText(customerName, customerPhone, orderSummary))}`;
+    const messageBody = whatsappCartText(customerName, customerPhone, lines, subtotal, orderSummary);
+    const url = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(messageBody)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
@@ -459,26 +470,31 @@ export default function ChatAssistant() {
         )}
       </AnimatePresence>
 
-      {/* Floating Robot Chef Button */}
-      <motion.button
-        type="button"
-        onClick={() => { setIsOpen(!isOpen); setShowTooltip(false); }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
-        className="relative flex h-16 w-16 items-center justify-center p-0 bg-transparent border-none outline-none cursor-pointer drop-shadow-[0_8px_20px_rgba(16,185,129,0.5)] will-change-transform"
-        aria-label={isOpen ? "Close Robot Chef assistant" : "Open Robot Chef assistant"} aria-expanded={isOpen}
+      {/* Floating Robot Chef Button with Dancing/Bouncing Animation */}
+      <motion.div
+        animate={!isOpen ? { y: [0, -8, 0], rotate: [0, 5, -5, 0] } : {}}
+        transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
       >
-        {isOpen ? (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-forest border border-lime text-ivory shadow-xl">
-            <X size={26} />
-          </div>
-        ) : (
-          <img src={robotChefIcon} alt="Robot Chef" className="h-full w-full object-contain filter drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]" />
-        )}
-        {!isOpen && (
-          <span className="absolute top-0 right-0 flex h-3.5 w-3.5 animate-ping rounded-full bg-lime" />
-        )}
-      </motion.button>
+        <motion.button
+          type="button"
+          onClick={() => { setIsOpen(!isOpen); setShowTooltip(false); }}
+          whileHover={{ scale: 1.12, rotate: 10 }}
+          whileTap={{ scale: 0.9 }}
+          className="relative flex h-16 w-16 items-center justify-center p-0 bg-transparent border-none outline-none cursor-pointer drop-shadow-[0_10px_25px_rgba(16,185,129,0.6)] will-change-transform"
+          aria-label={isOpen ? "Close Robot Chef assistant" : "Open Robot Chef assistant"} aria-expanded={isOpen}
+        >
+          {isOpen ? (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-forest border border-lime text-ivory shadow-xl">
+              <X size={26} />
+            </div>
+          ) : (
+            <img src={robotChefIcon} alt="Robot Chef" className="h-full w-full object-contain filter drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]" />
+          )}
+          {!isOpen && (
+            <span className="absolute top-0 right-0 flex h-3.5 w-3.5 animate-ping rounded-full bg-lime" />
+          )}
+        </motion.button>
+      </motion.div>
 
       {/* Chat window */}
       <AnimatePresence>
@@ -582,7 +598,7 @@ export default function ChatAssistant() {
               <div className="shrink-0 border-t border-ivory/10 bg-ink/40">
                 <div className="flex gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Quick menu buttons">
                   {count > 0 && <button type="button" onClick={goCheckout} className={`${chipCls} !bg-lime !text-ink font-bold`}>🛒 {count} · {inr(subtotal)}</button>}
-                  {QUICK.map((c) => <button key={c.label} type="button" disabled={loading} onClick={() => handleSend(null, c.q)} className={chipCls}>{c.label}</button>)}
+                  {QUICK.link || QUICK.map((c) => <button key={c.label} type="button" disabled={loading} onClick={() => handleSend(null, c.q)} className={chipCls}>{c.label}</button>)}
                   {categories.map((c) => <button key={c.id} type="button" disabled={loading} onClick={() => showCategory(c)} className={`${chipCls} !border-ivory/15 !bg-ivory/5 !text-ivory/85 hover:!bg-ivory/10`}>{c.name} <span className="text-ivory/45">{c.count}</span></button>)}
                 </div>
               </div>
@@ -596,13 +612,13 @@ export default function ChatAssistant() {
                 placeholder={leadStep === 1 ? "Apna naam likhiye..." : leadStep === 2 ? "10-digit mobile number..." : "Dish, category ya budget puchiye..."}
                 className="flex-1 rounded-xl border border-ivory/15 bg-black/30 px-3.5 py-2.5 text-xs text-ivory outline-none placeholder:text-ivory/40 focus:border-lime"
               />
-              <button type="submit" disabled={!input.trim() || loading} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-lime text-ink transition hover:bg-lime-soft disabled:opacity-40">
-                <Send size={16} />
+              <button type="submit" disabled={!input.trim() / loading} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-lime text-ink transition hover:bg-lime-soft disabled:opacity-40">
+                <Send size= {16} />
               </button>
             </form>
 
             <AnimatePresence>
-              {confirm && <ConfirmSend onNo={() => setConfirm(false)} onYes={confirmAndOpenWhatsApp} />}
+              {confirm && <ConfirmSend lines={lines} subtotal={subtotal} onNo={() => setConfirm(false)} onYes={confirmAndOpenWhatsApp} />}
             </AnimatePresence>
           </motion.div>
         )}
