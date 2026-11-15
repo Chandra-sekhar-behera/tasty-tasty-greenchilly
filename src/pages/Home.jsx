@@ -31,8 +31,6 @@ import catMutton from "../assets/Mutton Kasa.jpg";
 import catEgg from "../assets/Egg Chilli.jpg";
 import catRaitaPapad from "../assets/Fry Papad.jpg";
 
-
-
 const REVIEW_URL = "https://www.google.com/search?q=tasty+tasty+green+chilly+haribhaina";
 const EASE = [0.16, 1, 0.3, 1];
 
@@ -419,9 +417,6 @@ const fallbackCategoryPhotos = {
   "chinese-curry-veg": pexels(5339079),
   "chinese-curry-non-veg": pexels(28445826),
   "biryani-and-non-veg-curries": biryani,
-  "family-pack": noveltyVegAsset,  // Family pack ke liye Novelty Veg image
-  "dessert": iceCreamAsset,          // Dessert / Ice cream ke liye Ice cream image
-  "ice-cream": iceCreamAsset,
 };
 
 const categoryIcon = {
