@@ -13,6 +13,7 @@ import * as siteConfig from "../config/business.js";
 const adminConfig = siteConfig.adminConfig || { cloudUrl: "", localPin: "admin123" };
 
 const KEY = "greenchilly-menu-v2";
+const CAT_PHOTOS_KEY = "greenchilly-category-photos-v1"; // Separate storage for category images
 const DIRTY = "greenchilly-menu-dirty"; // local edits not yet pushed to cloud
 const REV = "greenchilly-menu-rev";     // which cloud version this browser's copy is based on
 
@@ -25,6 +26,7 @@ export const featuredIds = defaultFeatured;
 export let menuItems = [];
 export let menuById = {};
 export let categories = [];
+export let categoryPhotos = {}; // Store category-level images separately
 
 let version = 0;
 const listeners = new Set();
@@ -34,6 +36,16 @@ const validImage = (v) => {
   const s = typeof v === "string" ? v.trim() : "";
   return /^https:\/\//i.test(s) || /^data:image\/(jpeg|png|webp);base64,/i.test(s) ? s : "";
 };
+
+// Read saved category photos from localStorage
+function readCategoryPhotos() {
+  try {
+    return JSON.parse(localStorage.getItem(CAT_PHOTOS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+categoryPhotos = readCategoryPhotos();
 
 /** Keep only safe, known fields. A dish photo is the uploaded one if present, else the one bundled in code. */
 function clean(raw) {
@@ -64,7 +76,15 @@ function derive(items) {
   menuById = Object.fromEntries(items.map((i) => [i.id, i]));
   const map = new Map();
   for (const it of items) {
-    if (!map.has(it.categoryId)) map.set(it.categoryId, { id: it.categoryId, name: it.category, count: 0, from: Infinity });
+    if (!map.has(it.categoryId)) {
+      map.set(it.categoryId, { 
+        id: it.categoryId, 
+        name: it.category, 
+        count: 0, 
+        from: Infinity,
+        image: categoryPhotos[it.categoryId] || null // Attach category image if available
+      });
+    }
     const c = map.get(it.categoryId);
     c.count++; c.from = Math.min(c.from, it.price);
   }
@@ -95,11 +115,16 @@ export const useMenuVersion = () => useSyncExternalStore(subscribe, () => versio
 // Admin tab and Menu tab share one browser: when one saves, the other updates at once (no refresh needed).
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
-    if (e.key !== KEY) return;
-    const items = readLocal();
-    if (!items) return;
-    derive(items); version++;
-    listeners.forEach((l) => l());
+    if (e.key === KEY) {
+      const items = readLocal();
+      if (!items) return;
+      derive(items); version++;
+      listeners.forEach((l) => l());
+    } else if (e.key === CAT_PHOTOS_KEY) {
+      categoryPhotos = readCategoryPhotos();
+      derive(menuItems); version++;
+      listeners.forEach((l) => l());
+    }
   });
 }
 
@@ -120,7 +145,61 @@ export function addItem({ name, category, price, veg, desc }) {
   saveItems([...menuItems, { id, name, category, price, veg, desc, available: true }]);
   return id;
 }
-export function resetToDefaults() { commit(defaultMenu); markDirty(true); schedulePublish(); }
+
+/** Add a new category or ensure category exists */
+export function addCategory(categoryName) {
+  const category = String(categoryName || "").trim();
+  if (!category) return;
+  const categoryId = slugify(category);
+  
+  if (categories.some((c) => c.id === categoryId)) return;
+  
+  const name = `${category} Special`;
+  let id = slugify(name), n = 2;
+  while (menuById[id]) id = `${slugify(name)}-${n++}`;
+  
+  saveItems([
+    ...menuItems, 
+    { 
+      id, 
+      name, 
+      category, 
+      categoryId, 
+      price: 0, 
+      veg: true, 
+      desc: "New category item", 
+      available: true 
+    }
+  ]);
+}
+
+/** Updates all items belonging to a specific category or renames the category */
+export function setCategory(oldCategoryName, newCategoryName) {
+  const oldCat = String(oldCategoryName || "").trim();
+  const newCat = String(newCategoryName || "").trim();
+  if (!oldCat || !newCat) return;
+
+  const updated = menuItems.map((item) => {
+    if (item.category.toLowerCase() === oldCat.toLowerCase() || item.categoryId === slugify(oldCat)) {
+      return {
+        ...item,
+        category: newCat,
+        categoryId: slugify(newCat)
+      };
+    }
+    return item;
+  });
+
+  saveItems(updated);
+}
+
+export function resetToDefaults() { 
+  try { localStorage.removeItem(CAT_PHOTOS_KEY); } catch {}
+  categoryPhotos = {};
+  commit(defaultMenu); 
+  markDirty(true); 
+  schedulePublish(); 
+}
 
 /* ---------------- auto-publish (admin edits go live for everyone) ---------------- */
 let adminPin = "";
@@ -206,9 +285,58 @@ export async function setItemPhoto(id, file, pin, onStep = () => {}) {
   return { published: true };
 }
 
+// FIX: Category photo is now saved independently in categoryPhotos map without touching individual dish images
+export async function setCategoryPhoto(categoryId, file, pin, onStep = () => {}) {
+  const targetId = String(categoryId || "").trim().toLowerCase();
+  if (!targetId) return { published: false };
+  if (!file || !/^image\//.test(file.type)) throw new Error("Please choose an image file (JPG, PNG or WebP).");
+  if (file.size > 25 * 1024 * 1024) throw new Error("Image is too large (max 25 MB).");
+  
+  onStep("Preparing category photo…");
+  const image = await compressToFit(file);
+
+  categoryPhotos[targetId] = image;
+  try {
+    localStorage.setItem(CAT_PHOTOS_KEY, JSON.stringify(categoryPhotos));
+  } catch { /* storage full */ }
+
+  derive(menuItems);
+  version++;
+  listeners.forEach((l) => l());
+
+  if (!cloudEnabled()) return { published: false };
+  
+  onStep("Publishing to the website…");
+  try { 
+    await saveToCloud(pin); 
+  } catch (e) { 
+    throw new Error(`Category photo saved locally but NOT published yet (${e.message}). Press "Save to Cloud".`); 
+  }
+  return { published: true };
+}
+
 export async function removePhoto(id, pin) {
   updateItem(id, { image: undefined }, { publish: false });
   if (cloudEnabled()) await saveToCloud(pin);
+}
+
+// FIX: Remove only category photo mapping
+export async function removeCategoryPhoto(categoryId, pin) {
+  const targetId = String(categoryId || "").trim().toLowerCase();
+  if (!targetId) return;
+
+  delete categoryPhotos[targetId];
+  try {
+    localStorage.setItem(CAT_PHOTOS_KEY, JSON.stringify(categoryPhotos));
+  } catch {}
+
+  derive(menuItems);
+  version++;
+  listeners.forEach((l) => l());
+
+  if (cloudEnabled() && pin) {
+    await saveToCloud(pin);
+  }
 }
 
 /* ---------------- cloud (Google Apps Script) ---------------- */

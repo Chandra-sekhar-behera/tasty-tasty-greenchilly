@@ -80,5 +80,20 @@ export const defaultMenu = raw.flatMap(([category, items]) =>
   items.map((it) => ({ ...it, id: slugify(it.name), category, categoryId: slugify(category), available: true }))
 );
 
+/** Helper function to get menu with LocalStorage synchronization for Admin Panel updates */
+export const getMenu = () => {
+  if (typeof window === "undefined") return defaultMenu;
+  try {
+    const saved = localStorage.getItem("saffron_spice_menu"); // Ya tera jo bhi key name ho admin storage ka
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading menu from localStorage", e);
+  }
+  return defaultMenu;
+};
+
 // Home page "featured" picks — only dishes with a matching real photograph.
 export const featuredIds = ["chicken-biryani", "paneer-tikka", "chicken-tikka"];

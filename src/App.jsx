@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import Navbar from "./components/Navbar.jsx";
@@ -17,23 +17,45 @@ const Checkout = lazy(() => import("./pages/Checkout.jsx"));
 
 function RouteEffects() {
   const { pathname, hash } = useLocation();
+  
   useEffect(() => {
-    if (hash) {
-      const el = document.getElementById(hash.slice(1));
-      if (el) { el.scrollIntoView(); return; }
+    // Browser ke default scroll restoration ko manually 'manual' set karna safe rehta hai
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
     }
-    window.scrollTo(0, 0);
-    const main = document.getElementById("main");
-    if (main && pathname) main.focus({ preventScroll: true });
+
+    // Ek chota timeout/requestAnimationFrame dene se DOM paint hone ke baad scroll execute hoga
+    const timer = setTimeout(() => {
+      if (hash) {
+        const el = document.getElementById(hash.slice(1));
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      
+      const main = document.getElementById("main");
+      if (main && pathname) main.focus({ preventScroll: true });
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [pathname, hash]);
+
   return null;
 }
 
-const Fallback = () => <div className="min-h-[70vh]" aria-busy="true" aria-label="Loading page" />;
+// Fallback ki height ko min-h-screen kar diya hai taaki layout shift na ho
+const Fallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-ink" aria-busy="true" aria-label="Loading page">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-lime border-t-transparent" />
+  </div>
+);
 
 export default function App() {
   const { pathname } = useLocation();
   const bare = pathname === "/checkout";
+  
   return (
     <div className="flex min-h-screen flex-col bg-ink text-ivory">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-lime focus:px-5 focus:py-3 focus:text-ink">

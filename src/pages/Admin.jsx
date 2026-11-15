@@ -12,6 +12,7 @@ import SmartImg from "../components/SmartImg.jsx";
 import {
   menuItems, categories, useMenuVersion, updateItem, deleteItem, addItem, resetToDefaults, setItemPhoto, removePhoto,
   verifyPin, saveToCloud, loadFromCloud, cloudEnabled, isDirty, testCloud, BUILD, setAdminPin, publishState, isPhoto,
+  setCategoryPhoto, removeCategoryPhoto, addCategory,
 } from "../lib/menuStore.js";
 
 const SESSION = "gc-admin-pin";
@@ -19,7 +20,6 @@ const field = "w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-
 const cell = "w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-white placeholder:text-white/30 transition hover:border-white/15 hover:bg-white/[0.04] focus:border-emerald-400 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-emerald-400/30";
 const glow = "rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-black shadow-[0_0_24px_-4px_rgba(16,185,129,0.8)] transition hover:bg-emerald-300 disabled:opacity-50";
 const ghost = "inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-50";
-/* one grid for header + rows so columns always line up */
 const COLS = "md:grid-cols-[2rem_4.5rem_minmax(0,1fr)_6.5rem_6.5rem_8.5rem_5.5rem]";
 
 /* ---------------- login ---------------- */
@@ -62,10 +62,16 @@ function AddDish({ onDone, pin }) {
   const isNew = f.category === "__new";
   async function submit(e) {
     e.preventDefault();
-    const category = (isNew ? f.newCat : f.category).trim();
+    const categoryName = (isNew ? f.newCat : f.category).trim();
     const price = Math.round(Number(f.price));
-    if (!f.name.trim() || !category || !Number.isFinite(price) || price <= 0) return setErr("Name, category and a price above ₹0 are required.");
-    const id = addItem({ name: f.name.trim(), category, price, veg: f.veg, desc: f.desc.trim() });
+    if (!f.name.trim() || !categoryName || !Number.isFinite(price) || price <= 0) return setErr("Name, category and a price above ₹0 are required.");
+    
+    let catId = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase())?.id;
+    if (isNew && !catId) {
+      catId = addCategory(categoryName);
+    }
+
+    const id = addItem({ name: f.name.trim(), category: categoryName, categoryId: catId, price, veg: f.veg, desc: f.desc.trim() });
     let photoErr = "";
     if (file) {
       setBusy("Preparing photo…");
@@ -219,15 +225,17 @@ function Dashboard({ pin, onLogout }) {
   const mv = useMenuVersion();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
-  const [stock, setStock] = useState("all"); // all | in | out
-  const [type, setType] = useState("all");   // all | veg | non
+  const [stock, setStock] = useState("all");
+  const [type, setType] = useState("all");
   const [sort, setSort] = useState("menu");
   const [showAdd, setShowAdd] = useState(false);
   const [closed, setClosed] = useState({});
   const [sel, setSel] = useState(() => new Set());
   const [cloud, setCloud] = useState({ busy: false, msg: "", ok: true });
-  const dirty = useMemo(() => isDirty(), [mv, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dirty = useMemo(() => isDirty(), [mv, cloud]);
   const pub = publishState();
+
+  const [catPhotoState, setCatPhotoState] = useState({});
 
   useEffect(() => {
     setAdminPin(pin);
@@ -251,8 +259,8 @@ function Dashboard({ pin, onLogout }) {
         if (sorter) items = [...items].sort(sorter);
         return { ...c, items };
       })
-      .filter((g) => g.items.length);
-  }, [q, cat, stock, type, sort, mv]); // eslint-disable-line react-hooks/exhaustive-deps
+      .filter((g) => g.items.length || cat !== "all");
+  }, [q, cat, stock, type, sort, mv]);
 
   const visible = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const allSel = visible.length > 0 && visible.every((i) => sel.has(i.id));
@@ -282,7 +290,7 @@ function Dashboard({ pin, onLogout }) {
         const lost = r.livePhotos < r.sentPhotos || r.liveDishes < r.sentDishes;
         setCloud({ busy: false, ok: !lost, msg: lost
           ? `Cloud did NOT keep everything: sent ${r.sentDishes} dishes / ${r.sentPhotos} photos, cloud has ${r.liveDishes} / ${r.livePhotos}. Redeploy the Apps Script (New version) with the latest apps-script.gs.`
-          : `Saved and verified. Live for all visitors: ${r.liveDishes} dishes, ${r.livePhotos} with uploaded photos.` });
+          : `Saved and verified to Google Sheets. Live for all visitors: ${r.liveDishes} dishes, ${r.livePhotos} photos.` });
       } else setCloud({ busy: false, ok: r !== false, msg: r === false ? "Nothing to load from the cloud." : okMsg });
     }
     catch (e) { setCloud({ busy: false, ok: false, msg: e.message || "Failed" }); }
@@ -292,10 +300,32 @@ function Dashboard({ pin, onLogout }) {
     try {
       const r = await testCloud();
       const mine = menuItems.filter((i) => isPhoto(i.image)).length;
-      const notes = [r.dishes === 0 ? "The Sheet is EMPTY: press Save to Cloud." : "", r.photos < mine ? "Some photos in this browser are NOT in the cloud: press Save to Cloud." : "", isDirty() ? "This browser has unsaved changes." : ""].filter(Boolean).join(" ");
-      setCloud({ busy: false, ok: !notes, msg: `Cloud reachable. Sheet holds ${r.dishes} dishes, ${r.photos} uploaded photos. This browser: ${menuItems.length} dishes, ${mine} uploaded photos. ${notes}`.trim() });
+      const notes = [r.dishes === 0 ? "The Sheet is EMPTY: press Save to Cloud." : "", r.photos < mine ? "Some photos are NOT in the cloud: press Save to Cloud." : "", isDirty() ? "This browser has unsaved changes." : ""].filter(Boolean).join(" ");
+      setCloud({ busy: false, ok: !notes, msg: `Google Sheets connected successfully. Sheet holds ${r.dishes} dishes, ${r.photos} photos. Local: ${menuItems.length} dishes. ${notes}`.trim() });
     } catch (e) { setCloud({ busy: false, ok: false, msg: e.message || "Failed" }); }
   };
+
+  async function handleCategoryPhotoPick(catId, e) {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    setCatPhotoState(s => ({ ...s, [catId]: { busy: true, err: "" } }));
+    try {
+      await setCategoryPhoto(catId, file, pin);
+      setCatPhotoState(s => ({ ...s, [catId]: { busy: false, err: "" } }));
+    } catch (x) {
+      setCatPhotoState(s => ({ ...s, [catId]: { busy: false, err: x.message || "Failed to upload category photo" } }));
+    }
+  }
+
+  async function handleCategoryPhotoDrop(catId) {
+    setCatPhotoState(s => ({ ...s, [catId]: { busy: true, err: "" } }));
+    try {
+      await removeCategoryPhoto(catId, pin);
+      setCatPhotoState(s => ({ ...s, [catId]: { busy: false, err: "" } }));
+    } catch (x) {
+      setCatPhotoState(s => ({ ...s, [catId]: { busy: false, err: x.message || "Failed to remove category photo" } }));
+    }
+  }
 
   const sel2 = `${field} !w-auto !py-2 pr-8`;
   return (
@@ -304,7 +334,7 @@ function Dashboard({ pin, onLogout }) {
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">Admin panel</p>
           <h1 className="mt-2 font-serif text-4xl font-semibold text-white sm:text-5xl">Menu manager</h1>
-          <p className="mt-2 text-sm text-white/55">build {BUILD} · cloud {cloudEnabled() ? "ON" : "OFF"} · click any name, price or description to edit</p>
+          <p className="mt-2 text-sm text-white/55">build {BUILD} · Google Sheets Sync {cloudEnabled() ? "ON" : "OFF"} · click name, price or description to edit</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={exportCsv} className={ghost}><Download size={15} /> Export CSV</button>
@@ -322,21 +352,21 @@ function Dashboard({ pin, onLogout }) {
 
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-[#0d1512] p-4">
         {!cloudEnabled() ? (
-          <span className="inline-flex items-center gap-2 text-sm text-red-400"><AlertTriangle size={16} /> Cloud is OFF: changes stay on this browser only and other visitors will NOT see them.</span>
+          <span className="inline-flex items-center gap-2 text-sm text-red-400"><AlertTriangle size={16} /> Cloud URL missing in business config. Google Sheets sync is disabled.</span>
         ) : pub.state === "pending" || pub.state === "saving" ? (
           <span className="inline-flex items-center gap-2 text-sm text-amber-300"><CloudUpload size={16} /> {pub.msg}</span>
         ) : pub.state === "error" ? (
           <span className="inline-flex items-center gap-2 text-sm text-red-400"><AlertTriangle size={16} /> {pub.msg}</span>
         ) : dirty ? (
-          <span className="inline-flex items-center gap-2 text-sm text-amber-300"><AlertTriangle size={16} /> Changes on this browser are not saved to the website yet. Press Save to Cloud.</span>
+          <span className="inline-flex items-center gap-2 text-sm text-amber-300"><AlertTriangle size={16} /> Unsaved changes. Press Save to Cloud to update Google Sheets.</span>
         ) : (
-          <span className="inline-flex items-center gap-2 text-sm text-emerald-300"><Check size={16} /> {pub.state === "ok" ? pub.msg : "Same as the live website"}</span>
+          <span className="inline-flex items-center gap-2 text-sm text-emerald-300"><Check size={16} /> {pub.state === "ok" ? pub.msg : "Synced with Google Sheets"}</span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          <button type="button" disabled={!cloudEnabled() || cloud.busy} onClick={() => run(() => saveToCloud(pin), "Saved to Google Sheet (photos included). Live for all visitors.")} className={glow}><CloudUpload size={15} className="mr-1.5 inline" />Save to Cloud</button>
-          <button type="button" disabled={cloud.busy} onClick={test} className={ghost}><Check size={15} /> Test cloud</button>
-          <button type="button" disabled={!cloudEnabled() || cloud.busy} onClick={() => window.confirm("Replace local edits with the cloud menu?") && run(() => loadFromCloud({ force: true }), "Loaded from cloud.")} className={ghost}><CloudDownload size={15} /> Load from Cloud</button>
-          <button type="button" onClick={() => window.confirm("Reset the menu to the original defaults?") && resetToDefaults()} className={ghost}><RotateCcw size={15} /> Reset</button>
+          <button type="button" disabled={!cloudEnabled() || cloud.busy} onClick={() => run(() => saveToCloud(pin), "Saved to Google Sheet successfully.")} className={glow}><CloudUpload size={15} className="mr-1.5 inline" />Save to Cloud</button>
+          <button type="button" disabled={cloud.busy} onClick={test} className={ghost}><Check size={15} /> Test Sheet</button>
+          <button type="button" disabled={!cloudEnabled() || cloud.busy} onClick={() => window.confirm("Replace local edits with Google Sheets menu?") && run(() => loadFromCloud({ force: true }), "Loaded from Google Sheet.")} className={ghost}><CloudDownload size={15} /> Load from Cloud</button>
+          <button type="button" onClick={() => window.confirm("Reset the menu to original defaults?") && resetToDefaults()} className={ghost}><RotateCcw size={15} /> Reset</button>
         </div>
         {cloud.msg && <p role="status" className={`w-full text-sm ${cloud.ok ? "text-emerald-300" : "text-red-400"}`}>{cloud.msg}</p>}
       </div>
@@ -393,15 +423,37 @@ function Dashboard({ pin, onLogout }) {
         {groups.map((g) => {
           const shut = !!closed[g.id];
           const gOut = g.items.filter((i) => i.available === false).length;
+          const cState = catPhotoState[g.id] || {};
           return (
             <section key={g.id} role="rowgroup" aria-label={g.name}>
-              <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.id]: !c[g.id] }))} aria-expanded={!shut}
-                className="flex w-full items-center gap-3 border-b border-white/10 bg-emerald-400/[0.06] px-4 py-2.5 text-left transition hover:bg-emerald-400/10">
-                <ChevronDown size={16} className={`text-emerald-300 transition ${shut ? "-rotate-90" : ""}`} />
-                <span className="font-serif text-xl font-semibold text-white">{g.name}</span>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60">{g.items.length}</span>
-                {gOut > 0 && <span className="rounded-full bg-red-400/15 px-2 py-0.5 text-xs text-red-300">{gOut} out</span>}
-              </button>
+              <div className="flex w-full items-center justify-between border-b border-white/10 bg-emerald-400/[0.06] px-4 py-2.5">
+                <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.id]: !c[g.id] }))} aria-expanded={!shut}
+                  className="flex items-center gap-3 text-left transition hover:opacity-80">
+                  <ChevronDown size={16} className={`text-emerald-300 transition ${shut ? "-rotate-90" : ""}`} />
+                  <span className="font-serif text-xl font-semibold text-white">{g.name}</span>
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60">{g.items.length}</span>
+                  {gOut > 0 && <span className="rounded-full bg-red-400/15 px-2 py-0.5 text-xs text-red-300">{gOut} out</span>}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {cState.err && <span className="text-[0.7rem] text-red-400">{cState.err}</span>}
+                  {g.image ? (
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-8 w-12 overflow-hidden rounded border border-emerald-400/30">
+                        <SmartImg src={g.image} alt={g.name} className="h-full w-full object-cover" />
+                      </div>
+                      <button type="button" onClick={() => handleCategoryPhotoDrop(g.id)} disabled={cState.busy} title="Remove category photo" className="rounded p-1 text-white/50 hover:bg-red-400/10 hover:text-red-300">
+                        <ImageOff size={14} />
+                      </button>
+                    </div>
+                  ) : null}
+                  <label className="group relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20" title="Upload category banner/photo">
+                    <Camera size={14} />
+                    <span>{cState.busy ? "Uploading..." : g.image ? "Change Photo" : "Add Photo"}</span>
+                    <input type="file" accept="image/*" className="sr-only" onChange={(e) => handleCategoryPhotoPick(g.id, e)} disabled={cState.busy} />
+                  </label>
+                </div>
+              </div>
               {!shut && g.items.map((it) => <Row key={it.id} item={it} pin={pin} selected={sel.has(it.id)} onSelect={toggle} />)}
             </section>
           );
@@ -414,7 +466,7 @@ function Dashboard({ pin, onLogout }) {
           </div>
         )}
       </div>
-      <p className="mt-3 text-xs text-white/40">Showing {visible.length} of {menuItems.length} dishes · Enter = save, Esc = undo · changes go live automatically, or press Save to Cloud.</p>
+      <p className="mt-3 text-xs text-white/40">Showing {visible.length} of {menuItems.length} dishes · Press **Save to Cloud** to update your Google Sheet.</p>
     </div>
   );
 }
