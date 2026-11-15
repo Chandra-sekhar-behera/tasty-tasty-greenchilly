@@ -31,8 +31,7 @@ import catMutton from "../assets/Mutton Kasa.jpg";
 import catEgg from "../assets/Egg Chilli.jpg";
 import catRaitaPapad from "../assets/Fry Papad.jpg";
 
-import noveltyVegAsset from "../assets/Novelty Veg.WEBP";
-import iceCreamAsset from "../assets/Ice cream.WEBP";
+
 
 const REVIEW_URL = "https://www.google.com/search?q=tasty+tasty+green+chilly+haribhaina";
 const EASE = [0.16, 1, 0.3, 1];
