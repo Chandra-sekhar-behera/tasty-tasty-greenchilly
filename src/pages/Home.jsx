@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
@@ -178,7 +177,7 @@ function Hero() {
 
   return (
     <section ref={ref} className="relative isolate flex min-h-[90svh] items-center overflow-hidden bg-ink" aria-labelledby="hero-title">
-      <img src={interior} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full object-cover object-center opacity-25" />
+      <img src={interior} alt="" aria-hidden="true" width="1360" height="766" decoding="async" fetchPriority="low" className="absolute inset-0 h-full w-full object-cover object-center opacity-25" />
       <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/90 to-forest/40" aria-hidden="true" />
       <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/60" aria-hidden="true" />
 
@@ -404,7 +403,8 @@ const ownPhoto = (c) => {
   for (const [path, moduleVal] of Object.entries(droppedPhotos)) {
     const lowerPath = path.toLowerCase();
     for (const term of searchTerms) {
-      if (term.length > 2 && lowerPath.includes(term)) {
+      const file = lowerPath.split("/").pop().replace(/\.[a-z]+$/, "").replace(/[^a-z0-9]/g, "");
+      if (term.length > 2 && file === term) {
         return moduleVal;
       }
     }
@@ -472,13 +472,15 @@ const categoryIcon = {
 
 function CategoryCard({ c, i }) {
   const [bad, setBad] = useState(false);
+  useEffect(() => { setBad(false); }, [c.image]);
   
   // PRIORITY ORDER:
-  // 1. Direct admin/user uploaded asset via ownPhoto(c)
+  // 0. Photo uploaded in the Admin panel (c.image) - always wins
+  // 1. Direct asset file via ownPhoto(c)
   // 2. keywordPhoto match
   // 3. fallbackCategoryPhotos
   // 4. Pexels default image
-  const src = !bad ? (ownPhoto(c) || keywordPhoto(c) || fallbackCategoryPhotos[c.id] || pexels(1640777)) : null;
+  const src = !bad ? (c.image || ownPhoto(c) || keywordPhoto(c) || fallbackCategoryPhotos[c.id] || pexels(1640777)) : null;
   
   const Icon = categoryIcon[c.id] || keywordIcon(c) || UtensilsCrossed;
   const sample = menuItems.filter((m) => m.categoryId === c.id && m.available !== false).slice(0, 4);
@@ -487,8 +489,11 @@ function CategoryCard({ c, i }) {
     <div className="absolute inset-0 overflow-hidden rounded-3xl border border-lime/15 bg-forest shadow-2xl">
       {src ? (
         <img
+          key={src}
           src={src}
           alt={c.name}
+          width="640"
+          height="800"
           loading="lazy"
           decoding="async"
           onError={() => setBad(true)}
@@ -623,9 +628,12 @@ function Rating() {
   const [qr, setQr] = useState("");
   useEffect(() => {
     let live = true;
-    QRCode.toDataURL(writeUrl, { margin: 1, width: 400, errorCorrectionLevel: "M", color: { dark: "#08140e", light: "#ffffff" } })
+    // QR library is loaded after the page is idle, so it never delays first paint
+    const run = () => import("qrcode")
+      .then(({ default: QRCode }) => QRCode.toDataURL(writeUrl, { margin: 1, width: 400, errorCorrectionLevel: "M", color: { dark: "#08140e", light: "#ffffff" } }))
       .then((u) => live && setQr(u)).catch(() => {});
-    return () => { live = false; };
+    const idle = window.requestIdleCallback ? window.requestIdleCallback(run, { timeout: 4000 }) : setTimeout(run, 2500);
+    return () => { live = false; window.cancelIdleCallback ? window.cancelIdleCallback(idle) : clearTimeout(idle); };
   }, [writeUrl]);
 
   return (

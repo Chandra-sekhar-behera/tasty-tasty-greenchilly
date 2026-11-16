@@ -47,12 +47,30 @@ function readCategoryPhotos() {
 }
 categoryPhotos = readCategoryPhotos();
 
+/** Category photos travel inside the same Sheet as hidden rows (id starts with this prefix), so no script change is needed. */
+const CAT_ROW = "__cat__";
+const isCatRow = (r) => String(r?.id ?? "").startsWith(CAT_ROW);
+
+/** Pull category photos out of raw cloud rows: { categoryId: photo } */
+function extractCategoryPhotos(raw) {
+  const out = {};
+  if (!Array.isArray(raw)) return out;
+  for (const r of raw) {
+    if (!isCatRow(r)) continue;
+    const img = validImage(r?.image);
+    const cid = String(r.id).slice(CAT_ROW.length);
+    if (img && cid) out[cid] = img;
+  }
+  return out;
+}
+
 /** Keep only safe, known fields. A dish photo is the uploaded one if present, else the one bundled in code. */
 function clean(raw) {
   if (!Array.isArray(raw)) return null;
   const seen = new Set();
   const out = [];
   for (const r of raw) {
+    if (isCatRow(r)) continue; // hidden category-photo rows are not dishes
     const name = String(r?.name ?? "").trim().slice(0, 80);
     const category = String(r?.category ?? "").trim().slice(0, 60);
     const price = Math.round(Number(r?.price));
@@ -146,31 +164,10 @@ export function addItem({ name, category, price, veg, desc }) {
   return id;
 }
 
-/** Add a new category or ensure category exists */
+/** A category exists as soon as a dish uses it, so nothing extra is added here (old version created a fake "X Special" dish). */
 export function addCategory(categoryName) {
   const category = String(categoryName || "").trim();
-  if (!category) return;
-  const categoryId = slugify(category);
-  
-  if (categories.some((c) => c.id === categoryId)) return;
-  
-  const name = `${category} Special`;
-  let id = slugify(name), n = 2;
-  while (menuById[id]) id = `${slugify(name)}-${n++}`;
-  
-  saveItems([
-    ...menuItems, 
-    { 
-      id, 
-      name, 
-      category, 
-      categoryId, 
-      price: 0, 
-      veg: true, 
-      desc: "New category item", 
-      available: true 
-    }
-  ]);
+  return category ? slugify(category) : "";
 }
 
 /** Updates all items belonging to a specific category or renames the category */
@@ -285,7 +282,7 @@ export async function setItemPhoto(id, file, pin, onStep = () => {}) {
   return { published: true };
 }
 
-// FIX: Category photo is now saved independently in categoryPhotos map without touching individual dish images
+// Category photo is saved independently in categoryPhotos map without touching individual dish images
 export async function setCategoryPhoto(categoryId, file, pin, onStep = () => {}) {
   const targetId = String(categoryId || "").trim().toLowerCase();
   if (!targetId) return { published: false };
@@ -310,6 +307,7 @@ export async function setCategoryPhoto(categoryId, file, pin, onStep = () => {})
   try { 
     await saveToCloud(pin); 
   } catch (e) { 
+    markDirty(true);
     throw new Error(`Category photo saved locally but NOT published yet (${e.message}). Press "Save to Cloud".`); 
   }
   return { published: true };
@@ -320,7 +318,7 @@ export async function removePhoto(id, pin) {
   if (cloudEnabled()) await saveToCloud(pin);
 }
 
-// FIX: Remove only category photo mapping
+// Remove only category photo mapping
 export async function removeCategoryPhoto(categoryId, pin) {
   const targetId = String(categoryId || "").trim().toLowerCase();
   if (!targetId) return;
@@ -366,6 +364,13 @@ export async function loadFromCloud({ force = false } = {}) {
     const items = clean(data.items);
     if (!items) return false;
     setRev(data.rev || "");
+    const cloudCats = extractCategoryPhotos(data.items);
+    // Cloud is the truth once it has any category photo; before that keep what this browser already has.
+    if (Object.keys(cloudCats).length && JSON.stringify(cloudCats) !== JSON.stringify(categoryPhotos)) {
+      categoryPhotos = cloudCats;
+      try { localStorage.setItem(CAT_PHOTOS_KEY, JSON.stringify(categoryPhotos)); } catch { /* ignore */ }
+      derive(menuItems); version++; listeners.forEach((l) => l());
+    }
     if (JSON.stringify(items) !== JSON.stringify(menuItems)) commit(items);
     markDirty(false);
     return true;
@@ -426,7 +431,7 @@ export async function testCloud() {
   catch { throw new Error(CLOUD_HELP); }
   let data;
   try { data = await res.json(); } catch { throw new Error("The script answered with a web page instead of data. " + CLOUD_HELP); }
-  const items = Array.isArray(data?.items) ? data.items : [];
+  const items = (Array.isArray(data?.items) ? data.items : []).filter((r) => !isCatRow(r));
   return { dishes: items.length, photos: items.filter((r) => isPhoto(r.image)).length };
 }
 
@@ -445,6 +450,14 @@ export function saveToCloud(pin) {
 async function saveToCloudNow(pin) {
   const rows = menuItems.map(({ image, categoryId, ...r }) => ({ ...r, image: isPhoto(image) && String(image).length <= 48000 ? image : "" }));
   if (!rows.length) throw new Error("The menu is empty, so nothing was saved.");
+  // hidden rows that carry the category photos (only for categories that still have dishes)
+  const liveCats = new Set(menuItems.map((i) => i.categoryId));
+  for (const [cid, img] of Object.entries(categoryPhotos)) {
+    if (liveCats.has(cid) && isPhoto(img) && String(img).length <= 48000) {
+      const cat = menuItems.find((i) => i.categoryId === cid);
+      rows.push({ id: CAT_ROW + cid, name: "Category photo", category: cat.category, price: 0, veg: true, desc: "", available: false, image: img });
+    }
+  }
   const data = await post({ action: "save", key: pin, baseRev: getRev(), items: rows });
   if (!data.ok) throw new Error(data.error || "Cloud save failed");
   setRev(data.rev || "");

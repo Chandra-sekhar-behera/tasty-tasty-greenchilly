@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ShoppingBag, Phone, MapPin } from "lucide-react";
+import { ShoppingBag, Phone, MapPin, Clock } from "lucide-react";
 import Logo from "./Logo.jsx";
 import WhatsAppIcon from "./WhatsAppIcon.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useDialog } from "../lib/hooks.js";
 import { business, mapsDirectionsUrl } from "../config/business.js";
-import { enquiryUrl } from "../lib/whatsapp.js";
+import { enquiryUrl, deliveryEta } from "../lib/whatsapp.js";
+import { useOrderStatus } from "../lib/orderHours.js";
 
 /* Instagram: change the handle here */
 const IG_HANDLE = "tastytastygreenchilly2";
@@ -54,6 +55,67 @@ function RollLink({ to, label, active, onClick, reduce }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Live kitchen status                                                 */
+/*   md+  : centred pill between logo and buttons                       */
+/*   <md  : slim strip under the header (collapses on scroll / menu)    */
+/*  Only a pinging dot animates (transform + opacity), nothing else.    */
+/* ------------------------------------------------------------------ */
+const ETA = `${deliveryEta.min}–${deliveryEta.max}`;
+
+const LiveDot = memo(function LiveDot({ on }) {
+  return (
+    <span className="relative grid h-2.5 w-2.5 shrink-0 place-items-center" aria-hidden="true">
+      {on && <span className="absolute inset-0 animate-ping rounded-full bg-lime/70 motion-reduce:hidden" />}
+      <span className={`relative h-2.5 w-2.5 rounded-full ${on ? "bg-lime" : "bg-[#ffcf7a]"}`} />
+    </span>
+  );
+});
+
+const LivePill = memo(function LivePill({ on, note, hidden }) {
+  return (
+    <div
+      role="status"
+      className={`pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-lime/25 bg-ink/50 py-1.5 pl-3.5 transition-opacity duration-300 md:flex ${on ? "pr-1.5" : "pr-4"} ${hidden ? "opacity-0" : "opacity-100"}`}
+    >
+      <span className="flex items-center gap-2 text-[0.78rem] font-semibold text-ivory">
+        <LiveDot on={on} />
+        {on ? <><span className="hidden lg:inline">Live Kitchen:&nbsp;</span>Accepting Orders</> : <>Kitchen Closed<span className="hidden font-medium text-ivory/60 lg:inline">&nbsp;·&nbsp;{note}</span></>}
+      </span>
+      {on && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-lime/10 px-3 py-1 text-[0.74rem] font-semibold text-lime">
+          <Clock size={13} aria-hidden="true" />
+          <span className="hidden lg:inline">Avg Delivery:&nbsp;</span>{ETA} mins
+        </span>
+      )}
+    </div>
+  );
+});
+
+const LiveStrip = memo(function LiveStrip({ on, note, collapsed }) {
+  return (
+    <div className={`grid transition-[grid-template-rows] duration-300 ease-out md:hidden ${collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
+      <div className="min-h-0 overflow-hidden">
+        <div role="status" className="flex h-6 items-center justify-center gap-3 whitespace-nowrap border-t border-ivory/10 px-4 text-[0.68rem] font-medium text-ivory/85">
+          <span className="flex items-center gap-1.5">
+            <LiveDot on={on} />
+            {on ? <><span className="hidden sm:inline">Live Kitchen:&nbsp;</span>Accepting Orders</> : <>Kitchen Closed<span className="font-medium text-ivory/60">&nbsp;·&nbsp;{note}</span></>}
+          </span>
+          {on && (
+            <>
+              <span className="h-3 w-px bg-ivory/20" aria-hidden="true" />
+              <span className="flex items-center gap-1.5 text-lime">
+                <Clock size={12} aria-hidden="true" />
+                <span className="hidden sm:inline">Avg Delivery:&nbsp;</span>{ETA} mins
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 function Bars({ open }) {
   const bar = "block h-0.5 w-full rounded bg-ivory transition-all duration-500 ease-in-out";
   return (
@@ -71,6 +133,9 @@ export default function Navbar() {
   const { count, openCart } = useCart();
   const { pathname } = useLocation();
   const reduce = useReducedMotion();
+  const status = useOrderStatus();
+  const live = !!status.open;
+  const note = status.short.replace("Ordering opens", "Opens");
   const panel = useRef(null);
   const close = () => setOpen(false);
   useDialog(open, close, panel);
@@ -108,8 +173,10 @@ export default function Navbar() {
   return (
     <>
       <header className={`fixed inset-x-0 top-0 z-[70] transition-all duration-500 ${open ? "bg-transparent" : scrolled ? "glass shadow-xl shadow-black/30" : "bg-gradient-to-b from-ink/70 to-transparent"}`}>
-        <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:h-20">
+        <div className="relative mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:h-20">
           <Link to="/" aria-label={`${business.name} — home`} className="shrink-0"><Logo /></Link>
+
+          <LivePill on={live} note={note} hidden={open} />
 
           <div className="flex items-center gap-2 sm:gap-3">
             <button type="button" onClick={openCart} className="btn btn-lime btn-sm relative" aria-label={`Open your order, ${count} items`}>
@@ -125,6 +192,7 @@ export default function Navbar() {
             </button>
           </div>
         </div>
+        <LiveStrip on={live} note={note} collapsed={scrolled || open} />
       </header>
 
       <AnimatePresence>

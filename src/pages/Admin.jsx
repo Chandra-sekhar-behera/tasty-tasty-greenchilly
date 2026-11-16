@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Lock, LogOut, Plus, Trash2, CloudUpload, CloudDownload, RotateCcw, Search, Check, AlertTriangle, Eye,
-  ImagePlus, ImageOff, Download, X, ChevronDown, Camera, PackageX, PackageCheck, Leaf, Drumstick,
+  ImagePlus, ImageOff, EyeOff, Download, X, ChevronDown, Camera, PackageX, PackageCheck, Leaf, Drumstick,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import * as siteConfig from "../config/business.js";
@@ -12,7 +12,7 @@ import SmartImg from "../components/SmartImg.jsx";
 import {
   menuItems, categories, useMenuVersion, updateItem, deleteItem, addItem, resetToDefaults, setItemPhoto, removePhoto,
   verifyPin, saveToCloud, loadFromCloud, cloudEnabled, isDirty, testCloud, BUILD, setAdminPin, publishState, isPhoto,
-  setCategoryPhoto, removeCategoryPhoto, addCategory,
+  setCategoryPhoto, removeCategoryPhoto,
 } from "../lib/menuStore.js";
 
 const SESSION = "gc-admin-pin";
@@ -22,11 +22,81 @@ const glow = "rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text
 const ghost = "inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-50";
 const COLS = "md:grid-cols-[2rem_4.5rem_minmax(0,1fr)_6.5rem_6.5rem_8.5rem_5.5rem]";
 
-/* ---------------- login ---------------- */
+/* ---------------- login (liquid-metal style, admin emerald colours) ---------------- */
+const MC_CSS = `
+.mc-wrap{--mc-bg:#07100b;--mc-a:#34d399;--mc-b:#6ee7b7;--mc-dim:rgba(255,255,255,.5);--mx:0;--my:0;position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;min-height:100vh;min-height:100svh;padding:80px 0 24px;overflow:hidden;background:var(--mc-bg);color:#fff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.mc-wrap *{box-sizing:border-box}
+.mc-svg{position:absolute;width:0;height:0}
+.mc-stage{position:absolute;inset:0;z-index:0;filter:url(#mc-goo);opacity:.55;pointer-events:none;contain:strict}
+.mc-blob-pos{position:absolute;transition:transform .35s ease-out;transform:translate3d(calc(var(--mx) * var(--s) * 1px),calc(var(--my) * var(--s) * 1px),0)}
+.mc-blob{width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,var(--mc-b),#047857);box-shadow:inset -10px -10px 20px rgba(0,0,0,.5),10px 10px 30px rgba(52,211,153,.25);animation:mc-float 20s infinite alternate ease-in-out;will-change:transform}
+@keyframes mc-float{0%{transform:translate3d(0,0,0) scale(1)}33%{transform:translate3d(10vw,20vh,0) scale(1.2)}66%{transform:translate3d(-5vw,10vh,0) scale(.8)}100%{transform:translate3d(5vw,-10vh,0) scale(1.1)}}
+.mc-auth{position:relative;z-index:10;width:100%;max-width:440px;padding:40px}
+.mc-header{margin-bottom:56px;text-align:left}
+.mc-brand{display:block;margin-bottom:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;letter-spacing:4px;text-transform:uppercase;color:var(--mc-dim)}
+.mc-header h1{margin:0 0 0 -4px;font-weight:800;font-size:clamp(2.4rem,9vw,3rem);line-height:.9;letter-spacing:-2px}
+.mc-group{position:relative;margin-bottom:30px;transition:transform .4s cubic-bezier(.2,1,.3,1)}
+.mc-group:focus-within{transform:translateX(10px)}
+.mc-group label{display:block;margin-bottom:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;text-transform:uppercase;color:var(--mc-dim)}
+.mc-input{display:block;width:100%;padding:12px 44px 12px 0;background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.14);border-radius:0;color:#fff;font-size:18px;outline:none;transition:border-color .4s}
+.mc-input::placeholder{color:rgba(255,255,255,.25)}
+.mc-input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px #07100b inset;-webkit-text-fill-color:#fff;caret-color:#fff}
+.mc-glow{position:absolute;bottom:0;left:0;width:0;height:2px;background:var(--mc-a);box-shadow:0 0 15px var(--mc-a);transition:width .6s cubic-bezier(.2,1,.3,1);pointer-events:none}
+.mc-input:focus + .mc-glow{width:100%}
+.mc-eye{position:absolute;right:-6px;bottom:2px;display:grid;place-items:center;width:44px;height:44px;background:transparent;border:0;border-radius:999px;color:var(--mc-dim);cursor:pointer;transition:color .25s}
+.mc-eye:hover,.mc-eye:focus-visible{color:var(--mc-b);outline:none}
+.mc-eye:focus-visible{box-shadow:0 0 0 2px rgba(52,211,153,.45)}
+.mc-err{margin:-14px 0 18px;font-size:13px;color:#f87171}
+.mc-submit{position:relative;margin-top:44px;filter:url(#mc-goo)}
+.mc-btn{position:relative;z-index:2;width:100%;padding:20px 40px;background:var(--mc-a);color:#02130c;border:0;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:2px;cursor:pointer;transition:letter-spacing .3s,opacity .2s}
+.mc-btn:hover:not(:disabled){letter-spacing:4px}
+.mc-btn:disabled{cursor:not-allowed;opacity:.55}
+.mc-drop{position:absolute;top:50%;left:50%;z-index:1;width:100%;height:100%;background:var(--mc-b);border-radius:50px;transform:translate(-50%,-50%);transition:all .5s cubic-bezier(.175,.885,.32,1.275)}
+.mc-submit:hover .mc-drop{transform:translate(-50%,-50%) scale(1.05,1.2);filter:brightness(1.1)}
+.mc-foot{display:flex;justify-content:space-between;margin-top:40px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.mc-foot a{color:var(--mc-dim);text-decoration:none;transition:color .3s}
+.mc-foot a:hover{color:#fff}
+@media (max-width:480px){.mc-auth{padding:28px 24px}.mc-header{margin-bottom:40px}}
+@media (prefers-reduced-motion:reduce){.mc-blob{animation:none}.mc-blob-pos,.mc-group,.mc-glow,.mc-drop,.mc-btn{transition:none}}
+`;
+
 function Login({ onOk }) {
   const [pin, setPin] = useState("");
+  const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const wrap = useRef(null);
+
+  // Random blob layout once per mount (fewer blobs on touch devices = lighter on phones)
+  const blobs = useMemo(() => {
+    const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+    return Array.from({ length: touch ? 4 : 6 }, (_, i) => ({
+      size: Math.round(Math.random() * 200 + 150),
+      left: Math.round(Math.random() * 80 + 10),
+      top: Math.round(Math.random() * 80 + 10),
+      delay: -(Math.random() * 20).toFixed(1),
+      dur: (Math.random() * 15 + 15).toFixed(1),
+      speed: (i + 1) * 20,
+    }));
+  }, []);
+
+  // Subtle mouse parallax: one rAF-throttled write of two CSS variables, desktop only
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || typeof matchMedia !== "function") return;
+    if (!matchMedia("(pointer: fine)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const move = (e) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        el.style.setProperty("--mx", (e.clientX / window.innerWidth - 0.5).toFixed(3));
+        el.style.setProperty("--my", (e.clientY / window.innerHeight - 0.5).toFixed(3));
+      });
+    };
+    window.addEventListener("mousemove", move, { passive: true });
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("mousemove", move); };
+  }, []);
+
   async function submit(e) {
     e.preventDefault();
     setBusy(true); setErr("");
@@ -37,17 +107,72 @@ function Login({ onOk }) {
     if (ok) { try { sessionStorage.setItem(SESSION, pin.trim()); } catch { /* ignore */ } onOk(pin.trim()); }
     else setErr("Wrong PIN. Please try again.");
   }
+
   return (
-    <div className="grid min-h-[80vh] place-items-center px-5 pt-24">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-3xl border border-emerald-400/20 bg-[#0d1512] p-8 shadow-[0_0_60px_-20px_rgba(16,185,129,0.5)]">
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-400/10 text-emerald-300"><Lock size={24} /></span>
-        <h1 className="mt-5 font-serif text-4xl font-semibold text-white">Admin</h1>
-        <p className="mt-2 text-sm text-white/55">Enter the PIN to manage the menu.</p>
-        <label htmlFor="pin" className="sr-only">PIN</label>
-        <input id="pin" type="password" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN" autoComplete="current-password" className={`${field} mt-6`} />
-        {err && <p role="alert" className="mt-3 text-sm text-red-400">{err}</p>}
-        <button type="submit" disabled={busy || !pin} className={`${glow} mt-6 w-full`}>{busy ? "Checking…" : "Unlock"}</button>
-      </form>
+    <div ref={wrap} className="mc-wrap">
+      <style>{MC_CSS}</style>
+
+      <svg className="mc-svg" aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="mc-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+        </defs>
+      </svg>
+
+      <div className="mc-stage" aria-hidden="true">
+        {blobs.map((b, i) => (
+          <div key={i} className="mc-blob-pos" style={{ width: b.size, height: b.size, left: `${b.left}%`, top: `${b.top}%`, "--s": b.speed }}>
+            <div className="mc-blob" style={{ animationDelay: `${b.delay}s`, animationDuration: `${b.dur}s` }} />
+          </div>
+        ))}
+      </div>
+
+      <main className="mc-auth">
+        <header className="mc-header">
+          <span className="mc-brand">Secure area · Menu manager</span>
+          <h1>ADMIN<br />ACCESS</h1>
+        </header>
+
+        <form onSubmit={submit}>
+          <div className="mc-group">
+            <label htmlFor="pin">Admin PIN</label>
+            <input
+              id="pin"
+              className="mc-input"
+              type={show ? "text" : "password"}
+              autoFocus
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-invalid={!!err}
+              aria-describedby={err ? "pin-err" : undefined}
+            />
+            <div className="mc-glow" />
+            <button type="button" className="mc-eye" onClick={() => setShow((v) => !v)} aria-label={show ? "Hide PIN" : "Show PIN"} aria-pressed={show}>
+              {show ? <EyeOff size={19} /> : <Eye size={19} />}
+            </button>
+          </div>
+
+          {err && <p id="pin-err" role="alert" className="mc-err">{err}</p>}
+
+          <div className="mc-submit">
+            <div className="mc-drop" />
+            <button type="submit" className="mc-btn" disabled={busy || !pin}>{busy ? "Checking…" : "Unlock"}</button>
+          </div>
+        </form>
+
+        <footer className="mc-foot">
+          <Link to="/">← Back to site</Link>
+          <Link to="/menu">View menu</Link>
+        </footer>
+      </main>
     </div>
   );
 }
@@ -65,13 +190,10 @@ function AddDish({ onDone, pin }) {
     const categoryName = (isNew ? f.newCat : f.category).trim();
     const price = Math.round(Number(f.price));
     if (!f.name.trim() || !categoryName || !Number.isFinite(price) || price <= 0) return setErr("Name, category and a price above ₹0 are required.");
-    
-    let catId = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase())?.id;
-    if (isNew && !catId) {
-      catId = addCategory(categoryName);
-    }
 
-    const id = addItem({ name: f.name.trim(), category: categoryName, categoryId: catId, price, veg: f.veg, desc: f.desc.trim() });
+    // reuse the exact name of an existing category (any capitalisation) so no duplicate category is created
+    const existing = categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
+    const id = addItem({ name: f.name.trim(), category: existing ? existing.name : categoryName, price, veg: f.veg, desc: f.desc.trim() });
     let photoErr = "";
     if (file) {
       setBusy("Preparing photo…");
@@ -278,7 +400,7 @@ function Dashboard({ pin, onLogout }) {
   const exportCsv = () => {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const rows = [["Category", "Dish", "Price", "Type", "Stock", "Description"], ...menuItems.map((i) => [i.category, i.name, i.price, i.veg ? "Veg" : "Non-veg", i.available === false ? "Out of stock" : "In stock", i.desc || ""])];
-    const url = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = "menu.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
