@@ -1345,51 +1345,57 @@ export default function Menu() {
       <div ref={barRef} className="sticky top-[4.5rem] z-30 h-0 lg:top-20">
         <div className={`absolute inset-x-0 top-0 border-b border-ivory/10 bg-ink/95 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.95)] backdrop-blur-xl transition-[transform,opacity] duration-500 ease-out ${collapsed ? "pointer-events-none -translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
           <div className="mx-auto max-w-7xl px-4 sm:px-8">
-            <div className="flex items-center gap-2 pt-3 sm:gap-4">
-              <div className="relative min-w-0 flex-1 sm:max-w-sm sm:flex-none sm:basis-80">
-                <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ivory/40" aria-hidden="true" />
+                       <div className="flex flex-col gap-2.5 pt-3 sm:flex-row sm:items-center sm:gap-4 sm:pt-3">
+              <div className="relative w-full sm:max-w-sm sm:basis-80">
+                <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lime/80" aria-hidden="true" />
                 <input
                   id="menu-search-inline"
                   type="search"
+                  inputMode="search"
+                  enterKeyHint="search"
                   value={q}
                   onChange={(e) => update({ q: e.target.value })}
-                  placeholder="Search dishes"
+                  placeholder="Search biryani, paneer, noodles..."
                   aria-label="Search menu dishes"
                   autoComplete="off"
-                  className="h-10 w-full min-w-0 rounded-full border border-ivory/15 bg-ivory/[0.04] pl-10 pr-9 text-sm text-ivory outline-none transition placeholder:text-ivory/40 hover:border-ivory/25 focus:border-lime/60 focus:ring-2 focus:ring-lime/15"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="h-12 w-full min-w-0 rounded-2xl border border-ivory/15 bg-ivory/[0.06] pl-11 pr-11 text-base text-ivory shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition placeholder:text-ivory/40 hover:border-ivory/25 focus:border-lime/60 focus:bg-ivory/[0.08] focus:ring-4 focus:ring-lime/10 sm:h-10 sm:rounded-full sm:text-sm [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
                 />
                 {q && (
-                  <button type="button" onClick={() => update({ q: "" })} aria-label="Clear search" className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-ivory/55 transition hover:text-lime focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime/70"><X size={15} /></button>
+                  <button type="button" onClick={() => update({ q: "" })} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-ivory/10 text-ivory/70 transition active:scale-90 hover:text-lime focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime/70"><X size={15} /></button>
                 )}
               </div>
 
-              <div role="group" aria-label="Filter by diet" className="inline-flex shrink-0 rounded-xl border border-ivory/15 bg-ivory/[0.04] p-0.5">
-                {DIETS.map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    aria-pressed={diet === key}
-                    onClick={() => update({ diet: key })}
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-[0.6rem] px-3 text-xs font-medium transition ${
-                      diet === key ? "bg-lime text-ink shadow" : "text-ivory/70 hover:text-ivory"
-                    }`}
-                  >
-                    {key === "veg" && <VegMark veg={true} />}
-                    {key === "nonveg" && <VegMark veg={false} />}
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <div className="flex items-center gap-2">
+                <div role="group" aria-label="Filter by diet" className="flex flex-1 rounded-xl border border-ivory/15 bg-ivory/[0.04] p-0.5 sm:inline-flex sm:flex-none">
+                  {DIETS.map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={diet === key}
+                      onClick={() => update({ diet: key })}
+                      className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[0.6rem] px-3 text-xs font-medium transition active:scale-95 sm:flex-none ${
+                        diet === key ? "bg-lime text-ink shadow" : "text-ivory/70 hover:text-ivory"
+                      }`}
+                    >
+                      {key === "veg" && <VegMark veg={true} />}
+                      {key === "nonveg" && <VegMark veg={false} />}
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-              {filtered && (
-                <button
-                  type="button"
-                  onClick={resetAll}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-ivory/15 bg-ivory/[0.04] px-3 text-xs font-medium text-ivory/70 transition hover:border-lime/40 hover:text-ivory"
-                >
-                  <X size={14} /> Reset
-                </button>
-              )}
+                {filtered && (
+                  <button
+                    type="button"
+                    onClick={resetAll}
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ivory/15 bg-ivory/[0.04] px-3 text-xs font-medium text-ivory/70 transition active:scale-95 hover:border-lime/40 hover:text-ivory"
+                  >
+                    <X size={14} /> Reset
+                  </button>
+                )}
+              </div>
             </div>
 
             <div
