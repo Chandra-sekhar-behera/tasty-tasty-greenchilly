@@ -60,8 +60,8 @@ function Slide({ from = "left", delay = 0, duration = 1.2, distance = 60, classN
     ? { opacity: 0, x: 0, y: d }
     : { opacity: 0, x: from === "left" ? -d : from === "right" ? d : 0, y: from === "up" ? d : 0 };
   
-  const finalDuration = touch ? Math.min(duration, 0.4) : duration;
-  const finalDelay = touch ? Math.min(delay, 0.1) : delay;
+   const finalDuration = Math.min(duration, touch ? 0.4 : 0.6);
+  const finalDelay = Math.min(delay, touch ? 0.1 : 0.15);
 
   return (
     <Tag

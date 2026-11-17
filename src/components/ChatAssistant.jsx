@@ -217,23 +217,29 @@ async function fetchWithFallback(contents, cartLines) {
   throw new Error(lastError?.message || "All models busy");
 }
 
+const START_RE = /\b(order|confirm|checkout|check out|place|book|parcel|bhej|bas|done|final|ho gaya|that'?s all)\b/i;
 const ORDER_RE = /\b(order|book|parcel|delivery|deliver|chahiye|chaiye|mangwa|mangwana|manga|lena hai|karna hai|bhej|pickup|takeaway)\b/i;
 
-// Improved WhatsApp Order Message Format with cart breakdown and subtotal
-function whatsappCartText(name, phone, lines, subtotal, requirement) {
-  const itemsList = lines.length > 0 
+// WhatsApp order message: customer, items, total, delivery/pickup, address + map link
+function whatsappOrderText({ name, phone, mode, address, mapLink }, lines, subtotal, requirement) {
+  const itemsList = lines.length > 0
     ? lines.map((l) => {
         const dish = menuById[l.id];
-        return `▫️ ${dish ? dish.name : 'Dish'} (x${l.qty}) - ${inr((dish?.price || 0) * l.qty)}`;
+        return `▫️ ${dish ? dish.name : "Dish"} x${l.qty} - ${inr((dish?.price || 0) * l.qty)}`;
       }).join("\n")
     : `▫️ ${requirement || "Food order enquiry"}`;
 
+  const where = mode === "delivery"
+    ? `🛵 *Delivery*\n📍 *Address:* ${address || "Map location niche di gayi hai"}${mapLink ? `\n🗺️ *Map:* ${mapLink}` : ""}`
+    : `🥡 *Pickup* (khud lene aayenge)`;
+
   return (
-    `🌶️ *NEW ORDER / ENQUIRY - ${business.name.toUpperCase()}* 🌶️\n\n` +
-    `👤 *Customer Name:* ${name}\n` +
-    `📞 *Phone Number:* ${phone}\n\n` +
-    `🛒 *Order Items:* \n${itemsList}\n\n` +
-    `💰 *Subtotal Amount:* *${inr(subtotal)}*\n\n` +
+    `🌶️ *NEW ORDER - ${business.name.toUpperCase()}* 🌶️\n\n` +
+    `👤 *Name:* ${name}\n` +
+    `📞 *Phone:* ${phone}\n\n` +
+    `🛒 *Items:*\n${itemsList}\n` +
+    (lines.length > 0 ? `\n💰 *Subtotal:* *${inr(subtotal)}*\n` : "") +
+    `\n${where}\n\n` +
     `_Sent via ${business.shortName} Robot Chef Assistant_`
   );
 }
@@ -273,34 +279,6 @@ function DishRow({ id, cart, orderOpen }) {
   );
 }
 
-function ConfirmSend({ onNo, onYes, lines, subtotal }) {
-  const noRef = useRef(null);
-  useEffect(() => { noRef.current?.focus(); }, []);
-  return (
-    <motion.div className="absolute inset-0 z-20 grid place-items-center bg-ink/80 p-5 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onNo}>
-      <motion.div
-        role="alertdialog" aria-modal="true" aria-labelledby="chat-confirm-title"
-        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xs overflow-hidden rounded-3xl border border-lime/30 bg-forest p-6 text-center shadow-2xl"
-      >
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-lime/15 text-lime ring-1 ring-lime/40">
-          <img src={robotChefIcon} alt="Robot Chef" className="h-8 w-8 object-contain animate-bounce" />
-        </span>
-        <h3 id="chat-confirm-title" className="mt-4 font-serif text-2xl font-semibold">Send this order?</h3>
-        <p className="mt-2 text-sm leading-relaxed text-ivory/70">
-          {lines.length > 0 ? `Subtotal: ${inr(subtotal)}` : ''} Are you sure you want to send your order to {business.shortName} on WhatsApp?
-        </p>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button ref={noRef} type="button" onClick={noRef ? onNo : undefined} className="btn btn-ghost justify-center"><X size={16} /> No</button>
-          <button type="button" onClick={onYes} className="btn btn-lime justify-center"><Check size={16} /> Yes, send</button>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
 const QUICK = [
   { label: "🥦 Veg", q: "veg dishes" },
   { label: "🍗 Non-veg", q: "non veg dishes" },
@@ -319,9 +297,13 @@ export default function ChatAssistant() {
   const [messages, setMessages] = useState([{ role: "model", text: GREETING }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [confirm, setConfirm] = useState(false);
 
+  // leadStep: 0 normal chat | 1 name | 2 phone | 3 delivery/pickup | 4 address | 5 summary + WhatsApp button
   const [leadStep, setLeadStep] = useState(0);
+  const [orderMode, setOrderMode] = useState("");
+  const [address, setAddress] = useState("");
+  const [mapLink, setMapLink] = useState("");
+  const [locBusy, setLocBusy] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderSummary, setOrderSummary] = useState("");
@@ -330,7 +312,7 @@ export default function ChatAssistant() {
 
   useEffect(() => {
     if (isOpen && chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, loading, isOpen, confirm, leadStep]);
+  }, [messages, loading, isOpen, leadStep]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowTooltip(false), 6000);
@@ -342,6 +324,10 @@ export default function ChatAssistant() {
     setCustomerName("");
     setCustomerPhone("");
     setOrderSummary("");
+    setOrderMode("");
+    setAddress("");
+    setMapLink("");
+    setLocBusy(false);
   };
 
   const push = (...msgs) => setMessages((prev) => [...prev, ...msgs]);
@@ -361,7 +347,48 @@ export default function ChatAssistant() {
     const summary = lines.length ? lines.map((l) => `${menuById[l.id]?.name} x${l.qty}`).join(", ") : [...messages].reverse().find((m) => m.role === "user")?.text || "";
     setOrderSummary(summary);
     setLeadStep(1);
-    push({ role: "model", text: "Theek hai ji! Pehle apna naam bata dijiye." });
+    push({ role: "model", text: "Bilkul ji! Order bhejne ke liye 3-4 chhoti details chahiye. Pehle apna naam bata dijiye 😊" });
+  };
+
+  const chooseMode = (mode) => {
+    setOrderMode(mode);
+    if (mode === "delivery") {
+      setLeadStep(4);
+      push(
+        { role: "user", text: "🛵 Delivery" },
+        { role: "model", text: "Theek hai ji! Apna address likhiye (ghar no., area, landmark) ya niche 📍 button se apni location bhej dijiye." }
+      );
+    } else {
+      setLeadStep(5);
+      push(
+        { role: "user", text: "🥡 Pickup" },
+        { role: "model", text: "Bahut badhiya! Niche apna order dekh lijiye aur WhatsApp button dabaiye 👇" }
+      );
+    }
+  };
+
+  const shareLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      push({ role: "model", text: "Is device par location nahi mil sakti. Kripya address likh dijiye." });
+      return;
+    }
+    setLocBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setMapLink(`https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`);
+        setLocBusy(false);
+        push(
+          { role: "user", text: "📍 Meri location" },
+          { role: "model", text: "Location mil gayi ✅ Ab ghar number / landmark likh dijiye (ya 'skip' likhiye)." }
+        );
+      },
+      () => {
+        setLocBusy(false);
+        push({ role: "model", text: "Location nahi mil paayi (permission band hogi). Kripya address likh dijiye." });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   };
 
   const goCheckout = () => {
@@ -401,8 +428,40 @@ export default function ChatAssistant() {
         return;
       }
       setCustomerPhone(digits);
-      push({ role: "user", text: userText }, { role: "model", text: "Bahut badhiya! Details save ho gayi hain. Niche diye gaye button par click karke WhatsApp par order bhej dein!" });
+      push({ role: "user", text: userText }, { role: "model", text: "Shukriya! Ab batayein: Delivery chahiye ya Pickup? (niche button dabaiye)" });
       setLeadStep(3);
+      return;
+    }
+
+    if (leadStep === 3) {
+      const t = userText.toLowerCase();
+      if (/pick|take|khud|aaunga|aayenge|aaenge/.test(t)) { setInput(""); chooseMode("pickup"); return; }
+      if (/deliver|ghar|home|bhej|mangwa/.test(t)) { setInput(""); chooseMode("delivery"); return; }
+      push({ role: "user", text: userText }, { role: "model", text: "Kripya niche se Delivery ya Pickup chuniye 🙏" });
+      return;
+    }
+
+    if (leadStep === 4) {
+      const t = userText.trim();
+      const skip = /^(skip|nahi|no|na)$/i.test(t);
+      if (skip && !mapLink) {
+        push({ role: "user", text: userText }, { role: "model", text: "Delivery ke liye address ya location zaroori hai ji 🙏 Address likhiye ya 📍 button dabaiye." });
+        return;
+      }
+      if (!skip && t.length < 5) {
+        push({ role: "user", text: userText }, { role: "model", text: "Kripya poora address likhiye (ghar no., area, landmark)." });
+        return;
+      }
+      setAddress(skip ? "" : t);
+      setLeadStep(5);
+      push({ role: "user", text: userText }, { role: "model", text: "Perfect! Niche apna order dekh lijiye aur WhatsApp button dabaiye 👇" });
+      return;
+    }
+
+    // Customer says "order / confirm / bas" while the cart already has dishes: start the order flow right away
+    if (leadStep === 0 && count > 0 && userText.split(/\s+/).length <= 6 && START_RE.test(userText)) {
+      push({ role: "user", text: userText });
+      startLead();
       return;
     }
 
@@ -443,10 +502,13 @@ export default function ChatAssistant() {
     }
   };
 
-  const confirmAndOpenWhatsApp = () => {
-    setConfirm(false);
+  // One tap: opens WhatsApp with the full order (items, total, name, phone, delivery/pickup, address, map link)
+  const sendOnWhatsApp = () => {
     if (!status.open) { push({ role: "model", text: closedText() }); return; }
-    const messageBody = whatsappCartText(customerName, customerPhone, lines, subtotal, orderSummary);
+    const messageBody = whatsappOrderText(
+      { name: customerName, phone: customerPhone, mode: orderMode, address, mapLink },
+      lines, subtotal, orderSummary
+    );
     const url = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(messageBody)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
@@ -537,7 +599,7 @@ export default function ChatAssistant() {
                       )}
                       {leadStep === 0 && (
                         <button type="button" onClick={startLead} className="flex w-full items-center justify-between gap-2 rounded-xl border border-ivory/15 px-4 py-2.5 text-xs text-ivory/80 transition hover:border-lime/50 hover:text-ivory">
-                          <span className="flex items-center gap-2"><WhatsAppIcon size={16} /> Or send a quick enquiry on WhatsApp</span><ChevronRight size={14} />
+                          <span className="flex items-center gap-2"><WhatsAppIcon size={16} /> {count > 0 ? "Order yahin se WhatsApp par bhejiye" : "Or send a quick enquiry on WhatsApp"}</span><ChevronRight size={14} />
                         </button>
                       )}
                     </div>
@@ -578,15 +640,42 @@ export default function ChatAssistant() {
                 </div>
               )}
 
-              {leadStep === 3 && (
-                <div className="pt-2 text-center">
+              {leadStep === 5 && (
+                <div className="space-y-2 pt-1">
+                  <div className="rounded-2xl border border-lime/25 bg-ink/50 p-3 text-ivory/90">
+                    <p className="border-b border-ivory/10 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-lime">Aapka order</p>
+                    {lines.length > 0 ? (
+                      <ul className="divide-y divide-ivory/5">
+                        {lines.map((l) => {
+                          const d = menuById[l.id];
+                          return (
+                            <li key={l.id} className="flex items-center justify-between gap-2 py-1.5">
+                              <span className="min-w-0 flex-1 truncate">{d?.name || "Dish"} <span className="text-ivory/50">x{l.qty}</span></span>
+                              <span className="shrink-0 font-serif text-lime">{inr((d?.price || 0) * l.qty)}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="py-1.5 text-ivory/70">{orderSummary || "Food order enquiry"}</p>
+                    )}
+                    {lines.length > 0 && (
+                      <p className="flex items-center justify-between border-t border-ivory/10 pt-1.5 font-semibold"><span>Subtotal</span><span className="font-serif text-lime">{inr(subtotal)}</span></p>
+                    )}
+                    <div className="mt-2 space-y-0.5 border-t border-ivory/10 pt-2 text-ivory/75">
+                      <p>👤 {customerName} · 📞 {customerPhone}</p>
+                      <p>{orderMode === "delivery" ? "🛵 Delivery" : "🥡 Pickup"}</p>
+                      {orderMode === "delivery" && address && <p className="break-words">📍 {address}</p>}
+                      {orderMode === "delivery" && mapLink && <p className="text-lime">🗺️ Live location saath mein jayegi</p>}
+                    </div>
+                  </div>
                   <button
-                    type="button" onClick={() => (status.open ? setConfirm(true) : push({ role: "model", text: closedText() }))}
+                    type="button" onClick={sendOnWhatsApp}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3 text-xs font-bold text-white shadow-lg transition hover:bg-[#20ba5a]"
                   >
-                    <WhatsAppIcon size={18} /> Open WhatsApp with Order Details
+                    <WhatsAppIcon size={18} /> Send order on WhatsApp
                   </button>
-                  <button type="button" onClick={() => { resetAll(); push({ role: "model", text: "Theek hai ji, naya order shuru karte hain. Kya chahiye?" }); }} className="mt-2 text-[0.7rem] uppercase tracking-widest text-ivory/45 hover:text-ivory">Naya order</button>
+                  <button type="button" onClick={() => { resetAll(); push({ role: "model", text: "Theek hai ji, naya order shuru karte hain. Kya chahiye?" }); }} className="block w-full text-center text-[0.7rem] uppercase tracking-widest text-ivory/45 hover:text-ivory">Naya order</button>
                 </div>
               )}
 
@@ -597,9 +686,25 @@ export default function ChatAssistant() {
             {leadStep === 0 && (
               <div className="shrink-0 border-t border-ivory/10 bg-ink/40">
                 <div className="flex gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Quick menu buttons">
-                  {count > 0 && <button type="button" onClick={goCheckout} className={`${chipCls} !bg-lime !text-ink font-bold`}>🛒 {count} · {inr(subtotal)}</button>}
-                  {QUICK.link || QUICK.map((c) => <button key={c.label} type="button" disabled={loading} onClick={() => handleSend(null, c.q)} className={chipCls}>{c.label}</button>)}
+                  {count > 0 && <button type="button" onClick={startLead} className={`${chipCls} !bg-lime !text-ink font-bold`}>🛒 {count} · {inr(subtotal)} · Order karo</button>}
+                  {QUICK.map((c) => <button key={c.label} type="button" disabled={loading} onClick={() => handleSend(null, c.q)} className={chipCls}>{c.label}</button>)}
                   {categories.map((c) => <button key={c.id} type="button" disabled={loading} onClick={() => showCategory(c)} className={`${chipCls} !border-ivory/15 !bg-ivory/5 !text-ivory/85 hover:!bg-ivory/10`}>{c.name} <span className="text-ivory/45">{c.count}</span></button>)}
+                </div>
+              </div>
+            )}
+
+            {(leadStep === 3 || leadStep === 4) && (
+              <div className="shrink-0 border-t border-ivory/10 bg-ink/40">
+                <div className="flex gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {leadStep === 3 && (
+                    <>
+                      <button type="button" onClick={() => chooseMode("delivery")} className={chipCls}>🛵 Delivery</button>
+                      <button type="button" onClick={() => chooseMode("pickup")} className={chipCls}>🥡 Pickup</button>
+                    </>
+                  )}
+                  {leadStep === 4 && (
+                    <button type="button" disabled={locBusy} onClick={shareLocation} className={chipCls}>{locBusy ? "Location dhoondh raha hoon…" : mapLink ? "📍 Location mil gayi ✓ (dobara)" : "📍 Meri location bhejo"}</button>
+                  )}
                 </div>
               </div>
             )}
@@ -609,17 +714,14 @@ export default function ChatAssistant() {
               <input
                 type={leadStep === 2 ? "tel" : "text"} value={input} onChange={(e) => setInput(e.target.value)} maxLength={300}
                 aria-label="Type your message"
-                placeholder={leadStep === 1 ? "Apna naam likhiye..." : leadStep === 2 ? "10-digit mobile number..." : "Dish, category ya budget puchiye..."}
+                placeholder={leadStep === 1 ? "Apna naam likhiye..." : leadStep === 2 ? "10-digit mobile number..." : leadStep === 3 ? "Delivery ya Pickup likhiye..." : leadStep === 4 ? "Address / landmark likhiye..." : leadStep === 5 ? "Kuch aur puchna hai?..." : "Dish, category ya budget puchiye..."}
                 className="flex-1 rounded-xl border border-ivory/15 bg-black/30 px-3.5 py-2.5 text-xs text-ivory outline-none placeholder:text-ivory/40 focus:border-lime"
               />
-              <button type="submit" disabled={!input.trim() / loading} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-lime text-ink transition hover:bg-lime-soft disabled:opacity-40">
-                <Send size= {16} />
+              <button type="submit" disabled={!input.trim() || loading} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-lime text-ink transition hover:bg-lime-soft disabled:opacity-40">
+                <Send size={16} />
               </button>
             </form>
 
-            <AnimatePresence>
-              {confirm && <ConfirmSend lines={lines} subtotal={subtotal} onNo={() => setConfirm(false)} onYes={confirmAndOpenWhatsApp} />}
-            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
