@@ -2125,7 +2125,8 @@ export default function Menu() {
 
   // IMPORTANT: keep this AFTER every hook above. Until the real menu is ready, show only the loader,
   // so visitors never see the small built-in menu (44 dishes) that later jumps to the full one.
-  if (!ready) return <MenuLoader />;
+  // if (!ready) return <MenuLoader />;
+  if (!ready || new URLSearchParams(window.location.search).has("loader")) return <MenuLoader />;
 
   return (
     <>
