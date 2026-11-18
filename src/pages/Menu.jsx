@@ -1546,7 +1546,7 @@ import origVegStarter from "../assets/Dry Chana Fry.webp";
 import origRoti from "../assets/Tandoori Roti.jpg";
 import origTandoorNonVeg from "../assets/Tandoori Chicken (Full).jpg";
 import origVegCurry from "../assets/Kadai Paneer.jpg";
-import origNoodles from "../assets/Chilli Garlic Noodlesjpg";
+import origNoodles from "../assets/Chilli Garlic Noodles.jpg";
 import origDessert from "../assets/Ice cream.webp";
 
 const catThumbs = import.meta.glob("../assets/cat-*.webp", { eager: true, import: "default" });
