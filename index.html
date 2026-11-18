@@ -4,18 +4,79 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#08140E" />
+    
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="description" content="Tasty Tasty Greenchilly, Hari Bhaina Chhaka, Jatni, Odisha — Indian favourites, Chinese classics and tandoor-inspired flavours. Browse the menu and order on WhatsApp." />
+    
+    <!-- Primary SEO Meta Tags for Jatni & 10km Radius -->
+    <title>Tasty Tasty Greenchilly | Best Restaurant & Food Delivery in Jatni, Odisha</title>
+    <meta name="description" content="Order authentic Indian favourites, Chinese classics, and Tandoori flavours online from Tasty Tasty Greenchilly at Hari Bhaina Chhaka, Jatni, Odisha. Quick WhatsApp ordering!" />
+    <meta name="keywords" content="Tasty Tasty Greenchilly, restaurant in Jatni, food delivery Jatni, Hari Bhaina Chhak restaurants, Tandoori chicken Jatni, Chinese food Jatni 752050" />
+    
+    <!-- Local Geo Meta Tags (Targets Jatni & Khordha District) -->
+    <meta name="geo.region" content="IN-OR" />
+    <meta name="geo.placename" content="Jatni" />
+    <meta name="geo.position" content="20.1695;85.7047" />
+    <meta name="ICBM" content="20.1695, 85.7047" />
+
+    <!-- Open Graph / WhatsApp / Facebook Share Preview -->
     <meta property="og:title" content="Tasty Tasty Greenchilly | Jatni, Odisha" />
-    <meta property="og:description" content="Indian, Chinese and Tandoor. Browse the menu and order on WhatsApp." />
-    <meta property="og:type" content="restaurant" />
+    <meta property="og:description" content="Explore delicious Indian, Chinese and Tandoor items. Browse menu and order directly on WhatsApp!" />
+    <meta property="og:type" content="restaurant.restaurant" />
+    <meta property="og:url" content="https://tasty-tasty-greenchilly.vercel.app/" />
+    <meta property="og:image" content="https://tasty-tasty-greenchilly.vercel.app/og-image.jpg" />
+
+    <!-- Google Structured Data (LocalBusiness / Restaurant Schema for Local SEO) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": "Tasty Tasty Greenchilly",
+      "image": "https://tasty-tasty-greenchilly.vercel.app/og-image.jpg",
+      "url": "https://tasty-tasty-greenchilly.vercel.app/",
+      "telephone": "+919853000000",
+      "servesCuisine": ["Indian", "Chinese", "Tandoori", "Fast Food"],
+      "priceRange": "₹₹",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Hari Bhaina Chhaka",
+        "addressLocality": "Jatni",
+        "addressRegion": "Odisha",
+        "postalCode": "752050",
+        "addressCountry": "IN"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 20.1695,
+        "longitude": 85.7047
+      },
+      "openingHoursSpecification": {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": [
+          "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+        ],
+        "opens": "11:00",
+        "closes": "23:00"
+      },
+      "areaServed": {
+        "@type": "GeoCircle",
+        "geoMidpoint": {
+          "@type": "GeoCoordinates",
+          "latitude": 20.1695,
+          "longitude": 85.7047
+        },
+        "geoRadius": "10000"
+      }
+    }
+    </script>
+
+    <!-- Google Fonts & Razorpay -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <title>Tasty Tasty Greenchilly | Jatni, Odisha</title>
   </head>
-  <body>
+  <body class="bg-[#08140E] text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

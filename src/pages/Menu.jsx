@@ -1511,16 +1511,12 @@
 
 
 
-
-
-
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
   Search, X, SearchX, ShoppingBag, Plus, Clock,
-  Flame, Soup, Leaf, ChefHat, Wheat, Drumstick, UtensilsCrossed, LayoutGrid, Beef, CookingPot, Salad, Fish,
+  Flame, Leaf, UtensilsCrossed, LayoutGrid,
   IndianRupee, ChevronLeft, ChevronRight, ArrowRight,
 } from "lucide-react";
 import QtyStepper from "../components/QtyStepper.jsx";
@@ -1534,6 +1530,34 @@ import { usePageTitle } from "../lib/hooks.js";
 import { useOrderStatus, ORDER_HOURS_LABEL } from "../lib/orderHours.js";
 import paneerPhoto from "../assets/dish-paneer-tikka.webp";
 import biryaniPhoto from "../assets/dish-biryani.webp";
+import chickenTikka from "../assets/dish-chicken-tikka.webp";
+
+// Category photos: these files must be inside src/assets with these exact names
+import catRoll from "../assets/Double Egg Kabab Roll.jpg";
+import catSoup from "../assets/Veg Manchow Soup.jpg";
+import catStarterVeg from "../assets/Crispy Baby Corn.jpg";
+import catMutton from "../assets/Mutton Kasa.jpg";
+import catEgg from "../assets/Egg Chilli.jpg";
+import catRaitaPapad from "../assets/Fry Papad.jpg";
+
+// New category photos (originals). Small 320px copies named cat-*.webp in src/assets are used when present: much lighter.
+import origNovelty from "../assets/Novelty Veg.webp";
+import origVegStarter from "../assets/Dry Chana Fry.webp";
+import origRoti from "../assets/Tandoori Roti.jpg";
+import origTandoorNonVeg from "../assets/Tandoori Chicken (Full).jpg";
+import origVegCurry from "../assets/Kadai Paneer.jpg";
+import origNoodles from "../assets/Chilli Garlic Noodlesjpg";
+import origDessert from "../assets/Ice cream.webp";
+
+const catThumbs = import.meta.glob("../assets/cat-*.webp", { eager: true, import: "default" });
+const thumb = (key, fallback) => catThumbs[`../assets/cat-${key}.webp`] || fallback;
+const catNovelty = thumb("novelty", origNovelty);
+const catVegStarter = thumb("veg-starter", origVegStarter);
+const catRoti = thumb("roti", origRoti);
+const catTandoorNonVeg = thumb("tandoor-nonveg", origTandoorNonVeg);
+const catVegCurry = thumb("veg-curry", origVegCurry);
+const catNoodles = thumb("noodles", origNoodles);
+const catDessert = thumb("dessert", origDessert);
 import heroVideo from "../assets/hero.mp4";
 
 const DIETS = [["all", "All"], ["veg", "Veg"], ["nonveg", "Non-veg"]];
@@ -1591,20 +1615,77 @@ const ITEM_PHOTOS = {
   "Chicken Curry": px(7353487),
 };
 
-const categoryIcon = {
-  "starter-non-veg": Drumstick,
-  "tandoori-veg": Flame,
-  "tandoori-non-veg": Beef,
-  "indian-veg-curry": CookingPot,
-  "chinese-noodles": Soup,
-  "rice": Wheat,
-  "chinese-curry-veg": Salad,
-  "chinese-curry-non-veg": UtensilsCrossed,
-  "biryani-and-non-veg-curries": ChefHat,
+// Exact category ids first, then keyword rules so any new category still gets a sensible photo.
+const CAT_BY_ID = {
+  "novelty": catNovelty,
+  "starter-veg": catVegStarter,
+  "veg-starter": catVegStarter,
+  "starter-non-veg": chickenTikka,
+  "tandoori-veg": paneerPhoto,
+  "tandoori-non-veg": catTandoorNonVeg,
+  "indian-veg-curry": catVegCurry,
+  "chinese-noodles": catNoodles,
+  "chinese-curry-non-veg": catNoodles,
+  "chinese-curry-veg": catStarterVeg,
+  "rice": biryaniPhoto,
+  "biryani-and-non-veg-curries": biryaniPhoto,
+  "roti": catRoti,
+  "dessert": catDessert,
+  "desserts": catDessert,
+  "desert": catDessert,
+  // collection chips
+  "biryani": biryaniPhoto,
+  "mutton": catMutton,
+  "seafood": chickenTikka,
+  "breads": catRoti,
 };
-const iconFor = (id = "") =>
-  categoryIcon[id] ||
-  (/bread|roti|naan/.test(id) ? Wheat : /seafood|fish|prawn/.test(id) ? Fish : /mutton/.test(id) ? Beef : /biryani/.test(id) ? ChefHat : /soup/.test(id) ? Soup : UtensilsCrossed);
+const CAT_RULES = [
+  [/novelty|combo|platter/, catNovelty],
+  [/dessert|desert|sweet|ice-?cream|kulfi/, catDessert],
+  [/raita|papad|salad|accompan/, catRaitaPapad],
+  [/roll|wrap/, catRoll],
+  [/soup/, catSoup],
+  [/mutton|lamb|gosht|keema/, catMutton],
+  [/biryani|pulao|pulav|rice/, biryaniPhoto],
+  [/egg/, catEgg],
+  [/tandoor.*non[- ]?veg|non[- ]?veg.*tandoor/, catTandoorNonVeg],
+  [/chinese.*non[- ]?veg|non[- ]?veg.*chinese/, catNoodles],
+  [/seafood|fish|prawn|chicken|non[- ]?veg/, chickenTikka],
+  [/bread|roti|naan|kulcha|paratha/, catRoti],
+  [/noodle|chinese|manchurian/, catNoodles],
+  [/starter|corn|crispy|snack|chana/, catVegStarter],
+  [/curry|dal|gravy|masala|kadai|paneer/, catVegCurry],
+  [/tandoor|veg/, paneerPhoto],
+];
+const catPhoto = (id = "", name = "") => {
+  const key = String(id).toLowerCase();
+  if (CAT_BY_ID[key]) return CAT_BY_ID[key];
+  const text = `${key} ${String(name).toLowerCase()}`;
+  const hit = CAT_RULES.find(([re]) => re.test(text));
+  return hit ? hit[1] : null;
+};
+
+/** Small round category photo (falls back to a plain icon only if no photo matches). */
+function CatPic({ id, name = "", className = "", fallbackSize = 16 }) {
+  const src = catPhoto(id, name);
+  if (!src) return <UtensilsCrossed size={fallbackSize} aria-hidden="true" />;
+  return <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable="false" className={`object-cover ${className}`} />;
+}
+
+/** Background art for dishes that have no photo yet: faded category photo, or a big icon as last resort. */
+function PlaceholderArt({ id, name = "", iconClass = "" }) {
+  const src = catPhoto(id, name);
+  if (!src) return <UtensilsCrossed className={iconClass} strokeWidth={1} aria-hidden="true" />;
+  return <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable="false" className="absolute inset-0 h-full w-full object-cover opacity-30 saturate-50" />;
+}
+
+const normalizeText = (value) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 
 const tidy = (s = "") => {
   const t = String(s).replace(/^[^\p{L}\p{N}]+/u, "").trim();
@@ -1639,16 +1720,13 @@ function Slide({ from = "left", delay = 0, duration = 1.2, distance = 70, classN
   );
 }
 
-function MenuCard({ item, index, onOpen, orderOpen }) {
-  const { qtyOf, add, setQty } = useCart();
-  const qty = qtyOf(item.id);
+// memo: a cart change re-renders only the card whose quantity changed, not all 269.
+const MenuCard = memo(function MenuCard({ item, qty, add, setQty, onOpen, orderOpen }) {
   const [badSrc, setBadSrc] = useState([]);
   const src = [ownPhoto(item.id), item.image, ITEM_PHOTOS[item.name]].find((s) => s && !badSrc.includes(s)) || null;
-  const Icon = iconFor(item.categoryId);
   const open = () => onOpen({ item, src });
 
   return (
-    <Slide from="up" distance={32} duration={0.9} delay={(index % 4) * 0.07} className="h-full">
       <article className={`${item.available === false ? "opacity-60 grayscale-[40%] " : ""}group flex h-full flex-col overflow-hidden rounded-2xl border border-ivory/[0.08] bg-gradient-to-b from-ivory/[0.06] to-ivory/[0.02] transition duration-500 hover:-translate-y-1 hover:border-lime/40 hover:shadow-[0_24px_60px_-30px_rgba(139,203,53,0.35)]`}>
         <div
           role="button"
@@ -1671,7 +1749,7 @@ function MenuCard({ item, index, onOpen, orderOpen }) {
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-heritage via-deep to-ink" aria-hidden="true">
-                <Icon className="absolute -right-3 top-1/4 h-28 w-28 -rotate-12 text-lime/15 transition duration-[1400ms] group-hover:rotate-0 group-hover:scale-110" strokeWidth={1} />
+                <PlaceholderArt id={item.categoryId} name={item.category} iconClass="absolute -right-3 top-1/4 h-28 w-28 -rotate-12 text-lime/15 transition duration-[1400ms] group-hover:rotate-0 group-hover:scale-110" />
                 <span className="absolute left-1/4 top-1/4 h-20 w-20 rounded-full bg-lime/20 blur-[40px]" />
                 <span className="absolute bottom-2.5 right-3 text-[0.6rem] font-medium uppercase tracking-[0.18em] text-ivory/35">Photo coming soon</span>
               </div>
@@ -1700,9 +1778,8 @@ function MenuCard({ item, index, onOpen, orderOpen }) {
           )}
         </div>
       </article>
-    </Slide>
   );
-}
+});
 
 const photoOf = (item) => ownPhoto(item.id) || item.image || ITEM_PHOTOS[item.name] || null;
 
@@ -1711,7 +1788,6 @@ function PickCard({ item, onOpen, orderOpen }) {
   const qty = qtyOf(item.id);
   const [badSrc, setBadSrc] = useState([]);
   const src = [ownPhoto(item.id), item.image, ITEM_PHOTOS[item.name]].find((s) => s && !badSrc.includes(s)) || null;
-  const Icon = iconFor(item.categoryId);
   const open = () => onOpen({ item, src });
 
   return (
@@ -1737,7 +1813,7 @@ function PickCard({ item, onOpen, orderOpen }) {
             />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-heritage via-deep to-ink" aria-hidden="true">
-              <Icon className="absolute -right-3 top-1/4 h-28 w-28 -rotate-12 text-lime/15" strokeWidth={1} />
+              <PlaceholderArt id={item.categoryId} name={item.category} iconClass="absolute -right-3 top-1/4 h-28 w-28 -rotate-12 text-lime/15" />
             </div>
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-transparent" aria-hidden="true" />
@@ -1858,7 +1934,6 @@ function DishModal({ open, onClose, orderOpen }) {
 
   const item = open?.item;
   const src = open?.src;
-  const Icon = item ? iconFor(item.categoryId) : UtensilsCrossed;
   const qty = item ? qtyOf(item.id) : 0;
 
   return (
@@ -1895,7 +1970,7 @@ function DishModal({ open, onClose, orderOpen }) {
                 </>
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-heritage via-deep to-ink" aria-hidden="true">
-                  <Icon className="absolute -right-6 top-1/4 h-60 w-60 -rotate-12 text-lime/15" strokeWidth={1} />
+                  <PlaceholderArt id={item.categoryId} name={item.category} iconClass="absolute -right-6 top-1/4 h-60 w-60 -rotate-12 text-lime/15" />
                   <span className="absolute bottom-4 left-5 text-xs font-medium uppercase tracking-[0.18em] text-ivory/35">Photo coming soon</span>
                 </div>
               )}
@@ -1903,7 +1978,7 @@ function DishModal({ open, onClose, orderOpen }) {
             </motion.div>
 
             <motion.div variants={modalList} initial="hidden" animate="show" className="flex flex-col p-6 sm:p-8">
-              <motion.p variants={modalItem} className="eyebrow flex items-center gap-2 text-lime"><Icon size={14} /> {tidy(item.category)}</motion.p>
+              <motion.p variants={modalItem} className="eyebrow flex items-center gap-2 text-lime"><CatPic id={item.categoryId} name={item.category} className="h-6 w-6 rounded-full ring-1 ring-lime/40" fallbackSize={14} /> {tidy(item.category)}</motion.p>
               <motion.h2 variants={modalItem} className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-4xl">{item.name}</motion.h2>
               <motion.div variants={modalItem} className="mt-4 flex items-center gap-3">
                 <span className="font-serif text-3xl font-semibold text-lime">{inr(item.price)}</span>
@@ -1967,7 +2042,7 @@ function MenuHero({ status }) {
         ) : (
           <video
             src={heroVideo} poster={bg}
-            autoPlay muted loop playsInline preload="auto" tabIndex={-1} aria-hidden="true"
+            autoPlay muted loop playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
             onError={() => setVideoFailed(true)}
             className="h-full w-full object-cover object-center"
           />
@@ -2017,7 +2092,11 @@ export default function Menu() {
   const status = useOrderStatus();
   const reduce = useReducedMotion();
   const [params, setParams] = useSearchParams();
-  const { count, subtotal, openCart } = useCart();
+  const { count, subtotal, openCart, qtyOf, add, setQty } = useCart();
+  const cartFns = useRef({ add, setQty });
+  cartFns.current = { add, setQty };
+  const addStable = useCallback((id) => cartFns.current.add(id), []);
+  const setQtyStable = useCallback((id, qty) => cartFns.current.setQty(id, qty), []);
   const [collapsed, setCollapsed] = useState(false);
   const [openDish, setOpenDish] = useState(null);
   const resultsRef = useRef(null);
@@ -2036,6 +2115,7 @@ export default function Menu() {
   const colId = collections.some((c) => c.id === params.get("col")) ? params.get("col") : "all";
   const col = collections.find((c) => c.id === colId) || null;
   const q = params.get("q") || "";
+  const dq = useDeferredValue(q); // typing stays instant, the grid catches up right after
 
   const update = (patch) => {
     setParams((prev) => {
@@ -2062,12 +2142,13 @@ export default function Menu() {
   useEffect(() => {
     let lastY = window.scrollY;
     let ticking = false;
+    let stuckAt = 0;
     const run = () => {
       ticking = false;
       const el = barRef.current;
       if (!el) return;
       const y = window.scrollY;
-      const stuckAt = parseFloat(getComputedStyle(el).top) || 72;
+      if (!stuckAt) stuckAt = parseFloat(getComputedStyle(el).top) || 72;
       const stuck = el.getBoundingClientRect().top <= stuckAt + 4;
       if (!stuck) { setCollapsed(false); lastY = y; return; }
       if (Date.now() < holdRef.current) { lastY = y; return; }
@@ -2077,29 +2158,26 @@ export default function Menu() {
       lastY = y;
     };
     const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(run); } };
+    const onResize = () => { stuckAt = 0; };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onResize); };
   }, []);
 
+  // Search text is built once per menu change, not on every keystroke.
+  const haystack = useMemo(
+    () => menuItems.map((item) => normalizeText(`${item.name} ${item.desc} ${item.category} ${item.categoryId}`)),
+    [mv]
+  );
   const results = useMemo(() => {
-    const normalize = (value) =>
-      String(value ?? "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLocaleLowerCase()
-        .trim()
-        .replace(/\s+/g, " ");
-    const needle = normalize(q);
-    return menuItems.filter((item) => {
-      const searchableText = normalize(`${item.name} ${item.desc} ${item.category} ${item.categoryId}`);
-      return (
-        (cat === "all" || item.categoryId === cat) &&
-        (!col || inCollection(col, item)) &&
-        (diet === "all" || (diet === "veg") === item.veg) &&
-        (!needle || searchableText.includes(needle))
-      );
-    });
-  }, [cat, colId, diet, q, mv]);
+    const needle = normalizeText(dq);
+    return menuItems.filter((item, i) =>
+      (cat === "all" || item.categoryId === cat) &&
+      (!col || inCollection(col, item)) &&
+      (diet === "all" || (diet === "veg") === item.veg) &&
+      (!needle || haystack[i].includes(needle))
+    );
+  }, [cat, colId, diet, dq, haystack]);
 
   const groups = useMemo(
     () => (col ? [{ id: col.id, name: col.label, items: results }] : categories.map((c) => ({ ...c, items: results.filter((i) => i.categoryId === c.id) })).filter((g) => g.items.length)),
@@ -2202,10 +2280,9 @@ export default function Menu() {
               {collections.length > 0 && <span className="mx-1 h-5 w-px shrink-0 bg-ivory/15" aria-hidden="true" />}
               {collections.map((c) => {
                 const on = colId === c.id;
-                const Ico = iconFor(c.id);
                 return (
                   <button key={c.id} type="button" aria-pressed={on} onClick={() => pickCol(c.id)} className={chip(on)}>
-                    <Ico size={14} aria-hidden="true" /> {c.label}
+                    <CatPic id={c.id} name={c.label} className="h-5 w-5 shrink-0 rounded-full ring-1 ring-ink/20" fallbackSize={14} /> {c.label}
                     <span className={badge(on)}>{c.count}</span>
                   </button>
                 );
@@ -2213,10 +2290,9 @@ export default function Menu() {
               <span className="mx-1 h-5 w-px shrink-0 bg-ivory/15" aria-hidden="true" />
               {categories.map((c) => {
                 const on = cat === c.id;
-                const Ico = iconFor(c.id);
                 return (
                   <button key={c.id} type="button" aria-pressed={on} onClick={() => pick(c.id)} className={chip(on)}>
-                    <Ico size={14} aria-hidden="true" /> {tidy(c.name)}
+                    <CatPic id={c.id} name={c.name} className="h-5 w-5 shrink-0 rounded-full ring-1 ring-ink/20" fallbackSize={14} /> {tidy(c.name)}
                     <span className={badge(on)}>{catCounts[c.id] || 0}</span>
                   </button>
                 );
@@ -2252,12 +2328,11 @@ export default function Menu() {
               </div>
             ) : (
               groups.map((group, gi) => {
-                const GIcon = iconFor(group.id);
                 return (
-                <section key={group.id} className="mb-16 last:mb-0 sm:mb-20">
+                <section key={group.id} className="-mx-3 mb-6 px-3 pb-10 last:mb-0 sm:mb-10 [content-visibility:auto] [contain-intrinsic-size:auto_900px]">
                   <div className="mb-7 flex items-center gap-4 sm:mb-9">
-                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-lime/10 text-lime ring-1 ring-lime/25 sm:h-14 sm:w-14">
-                      <GIcon size={22} strokeWidth={1.6} aria-hidden="true" />
+                    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-lime/10 text-lime ring-1 ring-lime/25 sm:h-14 sm:w-14">
+                      <CatPic id={group.id} name={group.name} className="h-full w-full" fallbackSize={22} />
                     </span>
                     <div className="min-w-0">
                       <p className="eyebrow text-lime/80">{String(gi + 1).padStart(2, "0")} · {group.items.length} {group.items.length === 1 ? "dish" : "dishes"}</p>
@@ -2266,8 +2341,8 @@ export default function Menu() {
                     <span className="hidden h-px flex-1 bg-gradient-to-r from-lime/40 via-ivory/10 to-transparent sm:block" aria-hidden="true" />
                   </div>
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {group.items.map((item, idx) => (
-                      <MenuCard key={item.id} item={item} index={idx} onOpen={setOpenDish} orderOpen={status.open} />
+                    {group.items.map((item) => (
+                      <MenuCard key={item.id} item={item} qty={qtyOf(item.id)} add={addStable} setQty={setQtyStable} onOpen={setOpenDish} orderOpen={status.open} />
                     ))}
                   </div>
                 </section>
