@@ -3,6 +3,10 @@
 //  * - Default data lives in src/data/menu.js
 //  * - Edits are saved to localStorage instantly (this browser)
 //  * - "Save to Cloud" pushes to a Google Sheet through a Google Apps Script; every visitor loads it from there.
+//  *
+//  * FIRST-VISIT FIX: when this browser has no saved copy yet, the menu page shows a loader
+//  * (see useMenuReady) instead of the small built-in default menu, so visitors never see a
+//  * wrong dish count that jumps after a refresh.
 //  */
 // import { useSyncExternalStore } from "react";
 // import { defaultMenu, featuredIds as defaultFeatured } from "../data/menu.js";
@@ -12,8 +16,15 @@
 // // Safe even if business.js is an older copy without adminConfig (falls back to local-only mode)
 // const adminConfig = siteConfig.adminConfig || { cloudUrl: "", localPin: "admin123" };
 
-// const KEY = "greenchilly-menu-v2";
+// // Full menu baked in at build time by scripts/snapshot-menu.mjs. Optional: the app still works if the file is missing.
+// const snapshotFiles = import.meta.glob("../data/menu.snapshot.json", { eager: true, import: "default" });
+// const snapshot = Object.values(snapshotFiles)[0] || null;
+
+// const KEY = "greenchilly-menu-v3"; // v3: older browsers may hold a stale 44-dish copy under v2, so it is ignored
+// const SNAP_KEY = "greenchilly-menu-snap"; // which build snapshot this browser's saved copy belongs to
+// const IMG_BASE = "/menu-img/"; // dish photos baked in at build time (see scripts/snapshot-menu.mjs)
 // const CAT_PHOTOS_KEY = "greenchilly-category-photos-v1"; // Separate storage for category images
+// const COUNT_KEY = "greenchilly-menu-count"; // last known dish count (used by the loader text)
 // const DIRTY = "greenchilly-menu-dirty"; // local edits not yet pushed to cloud
 // const REV = "greenchilly-menu-rev";     // which cloud version this browser's copy is based on
 
@@ -34,6 +45,7 @@
 // /** A photo is accepted only if it is an https URL (cloud/Drive) or an inline image (local-only mode). */
 // const validImage = (v) => {
 //   const s = typeof v === "string" ? v.trim() : "";
+//   if (s.startsWith(IMG_BASE) && !s.includes("..")) return s;
 //   return /^https:\/\//i.test(s) || /^data:image\/(jpeg|png|webp);base64,/i.test(s) ? s : "";
 // };
 
@@ -95,10 +107,10 @@
 //   const map = new Map();
 //   for (const it of items) {
 //     if (!map.has(it.categoryId)) {
-//       map.set(it.categoryId, { 
-//         id: it.categoryId, 
-//         name: it.category, 
-//         count: 0, 
+//       map.set(it.categoryId, {
+//         id: it.categoryId,
+//         name: it.category,
+//         count: 0,
 //         from: Infinity,
 //         image: categoryPhotos[it.categoryId] || null // Attach category image if available
 //       });
@@ -112,23 +124,57 @@
 // function readLocal() {
 //   try { return clean(JSON.parse(localStorage.getItem(KEY))); } catch { return null; }
 // }
-// derive(readLocal() || defaultMenu);
+// const dirtyNow = () => { try { return localStorage.getItem(DIRTY) === "1"; } catch { return false; } };
+// const snapItems = snapshot ? clean(snapshot.items) : null;
+// const snapSig = snapshot?.sig ? String(snapshot.sig) : "";
+// const snapCats = snapshot?.categoryPhotos && typeof snapshot.categoryPhotos === "object"
+//   ? Object.fromEntries(Object.entries(snapshot.categoryPhotos).filter(([k, v]) => k && validImage(v)))
+//   : {};
+// const getSnapSig = () => { try { return localStorage.getItem(SNAP_KEY) || ""; } catch { return ""; } };
+// const setSnapSig = (v) => { try { localStorage.setItem(SNAP_KEY, v); } catch { /* ignore */ } };
+
+// let savedCopy = readLocal();
+// // A new deploy ships fresher data than an old browser copy, so drop the old copy (unless it has unpublished admin edits).
+// if (savedCopy && snapItems && !dirtyNow() && getSnapSig() !== snapSig) savedCopy = null;
+// if (!savedCopy && snapItems) {
+//   setSnapSig(snapSig);
+//   if (!dirtyNow() && snapshot.rev) setRev(snapshot.rev);
+// }
+// if (snapItems && !Object.keys(categoryPhotos).length) categoryPhotos = snapCats;
+// // Never fall back to the small built-in menu when a full snapshot exists.
+// derive(savedCopy || snapItems || defaultMenu);
+
+// /* ---------------- "ready" state: stops the 44 -> 269 flash ---------------- */
+// // Ready immediately if this browser already has a saved menu, or if there is no cloud to wait for.
+// // Otherwise the menu page shows the loader until the cloud answers (or finally gives up).
+// let ready = Boolean(savedCopy) || Boolean(snapItems) || !adminConfig.cloudUrl;
 
 // function commit(items, { persist = true } = {}) {
 //   derive(items);
 //   version++;
 //   if (persist) {
-//     try { 
-//       localStorage.setItem(KEY, JSON.stringify(items.map(({ image, ...rest }) => (image && image !== defaultById[rest.id]?.image ? { ...rest, image } : rest)))); 
+//     try {
+//       localStorage.setItem(KEY, JSON.stringify(items.map(({ image, ...rest }) => (image && image !== defaultById[rest.id]?.image ? { ...rest, image } : rest))));
 //     } catch { /* storage full/blocked */ }
+//     try { localStorage.setItem(COUNT_KEY, String(items.length)); } catch { /* ignore */ }
+//     if (snapSig) setSnapSig(snapSig);
 //   }
 //   listeners.forEach((l) => l());
 // }
 
 // const subscribe = (l) => { listeners.add(l); return () => listeners.delete(l); };
 
+// const markReady = () => {
+//   if (ready) return;
+//   ready = true;
+//   listeners.forEach((l) => l());
+// };
+
 // /** Call once at the top of any page/component that renders menu data so it re-renders on change. */
 // export const useMenuVersion = () => useSyncExternalStore(subscribe, () => version);
+
+// /** true once the real menu is available (cache, cloud, or cloud gave up). Show a loader while false. */
+// export const useMenuReady = () => useSyncExternalStore(subscribe, () => ready);
 
 // // Admin tab and Menu tab share one browser: when one saves, the other updates at once (no refresh needed).
 // if (typeof window !== "undefined") {
@@ -137,6 +183,7 @@
 //       const items = readLocal();
 //       if (!items) return;
 //       derive(items); version++;
+//       markReady();
 //       listeners.forEach((l) => l());
 //     } else if (e.key === CAT_PHOTOS_KEY) {
 //       categoryPhotos = readCategoryPhotos();
@@ -154,7 +201,7 @@
 // };
 // export const isDirty = () => { try { return localStorage.getItem(DIRTY) === "1"; } catch { return false; } };
 
-// export function saveItems(items, { publish = true } = {}) { commit(clean(items) || []); markDirty(true); if (publish) schedulePublish(); }
+// export function saveItems(items, { publish = true } = {}) { commit(clean(items) || []); markDirty(true); markReady(); if (publish) schedulePublish(); }
 // export function updateItem(id, patch, opts) { saveItems(menuItems.map((i) => (i.id === id ? { ...i, ...patch } : i)), opts); }
 // export function deleteItem(id) { saveItems(menuItems.filter((i) => i.id !== id)); }
 // export function addItem({ name, category, price, veg, desc }) {
@@ -190,17 +237,17 @@
 //   saveItems(updated);
 // }
 
-// export function resetToDefaults() { 
+// export function resetToDefaults() {
 //   try { localStorage.removeItem(CAT_PHOTOS_KEY); } catch {}
 //   categoryPhotos = {};
-//   commit(defaultMenu); 
-//   markDirty(true); 
-//   schedulePublish(); 
+//   commit(defaultMenu);
+//   markDirty(true);
+//   schedulePublish();
 // }
 
 // /* ---------------- auto-publish (admin edits go live for everyone) ---------------- */
 // let adminPin = "";
-// export const setAdminPin = (p) => { adminPin = p || ""; };
+// export const setAdminPin = (p) => { adminPin = p || ""; if (adminPin && !isDirty()) loadFromCloud({ force: true }); };
 // let pub = { state: "idle", msg: "" };
 // export const publishState = () => pub;
 // const setPub = (state, msg) => { pub = { state, msg }; version++; listeners.forEach((l) => l()); };
@@ -241,13 +288,13 @@
 // }
 
 // const PHOTO_LIMIT = 44000;
-// export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/.test(String(v || ""));
+// export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/.test(String(v || "")) || String(v || "").startsWith(IMG_BASE);
 
 // async function compressToFit(file) {
 //   const bmp = await loadBitmap(file);
 //   const sw0 = bmp.width || bmp.naturalWidth, sh0 = bmp.height || bmp.naturalHeight;
-//   let sw = sw0, sh = sw0 * 0.75;                       
-//   if (sh > sh0) { sh = sh0; sw = sh0 / 0.75; }         
+//   let sw = sw0, sh = sw0 * 0.75;
+//   if (sh > sh0) { sh = sh0; sw = sh0 / 0.75; }
 //   const sx = (sw0 - sw) / 2, sy = (sh0 - sh) / 2;
 //   try {
 //     for (const width of [560, 480, 420, 360, 300, 240]) {
@@ -255,7 +302,7 @@
 //       const c = document.createElement("canvas");
 //       c.width = w; c.height = h;
 //       const g = c.getContext("2d");
-//       g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);    
+//       g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
 //       g.imageSmoothingQuality = "high";
 //       g.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
 //       for (const q of [0.72, 0.62, 0.52, 0.42, 0.32]) {
@@ -288,7 +335,7 @@
 //   if (!targetId) return { published: false };
 //   if (!file || !/^image\//.test(file.type)) throw new Error("Please choose an image file (JPG, PNG or WebP).");
 //   if (file.size > 25 * 1024 * 1024) throw new Error("Image is too large (max 25 MB).");
-  
+
 //   onStep("Preparing category photo…");
 //   const image = await compressToFit(file);
 
@@ -302,13 +349,13 @@
 //   listeners.forEach((l) => l());
 
 //   if (!cloudEnabled()) return { published: false };
-  
+
 //   onStep("Publishing to the website…");
-//   try { 
-//     await saveToCloud(pin); 
-//   } catch (e) { 
+//   try {
+//     await saveToCloud(pin);
+//   } catch (e) {
 //     markDirty(true);
-//     throw new Error(`Category photo saved locally but NOT published yet (${e.message}). Press "Save to Cloud".`); 
+//     throw new Error(`Category photo saved locally but NOT published yet (${e.message}). Press "Save to Cloud".`);
 //   }
 //   return { published: true };
 // }
@@ -351,16 +398,19 @@
 // let loadingCloud = false;
 // export async function loadFromCloud({ force = false } = {}) {
 //   const url = adminConfig.cloudUrl;
-//   if (!url || (!force && (isDirty() || loadingCloud))) return false; 
+//   if (!url || (!force && (isDirty() || loadingCloud))) return false;
 //   loadingCloud = true;
 //   try {
 //     let data = null;
-//     const waits = [20000, 25000, 30000];
+//     // Shorter waits than before: a visitor should never stare at a loader for 30+ seconds.
+//     const waits = [8000, 10000, 15000];
 //     for (let i = 0; i < waits.length && !data; i++) {
-//       try { data = await fetchMenu(waits[i]); } catch { if (i < waits.length - 1) await sleep(1500 * (i + 1)); }
+//       try { data = await fetchMenu(waits[i]); } catch { if (i < waits.length - 1) await sleep(800 * (i + 1)); }
 //     }
 //     if (!data) return false;
-//     if (!force && isDirty()) return false; 
+//     if (!force && isDirty()) return false;
+//     // Same version as this copy: nothing to compare, nothing to re-render, nothing to save.
+//     if (!force && data.rev && String(data.rev) === getRev()) return true;
 //     const items = clean(data.items);
 //     if (!items) return false;
 //     setRev(data.rev || "");
@@ -371,10 +421,11 @@
 //       try { localStorage.setItem(CAT_PHOTOS_KEY, JSON.stringify(categoryPhotos)); } catch { /* ignore */ }
 //       derive(menuItems); version++; listeners.forEach((l) => l());
 //     }
-//     if (JSON.stringify(items) !== JSON.stringify(menuItems)) commit(items);
+//     // Always save the first cloud copy so the next visit is instant, even if it equals what is on screen.
+//     if (JSON.stringify(items) !== JSON.stringify(menuItems) || !readLocal()) commit(items);
 //     markDirty(false);
 //     return true;
-//   } finally { loadingCloud = false; }
+//   } finally { loadingCloud = false; markReady(); }
 // }
 
 // export const driveId = (url) => (/^https:\/\/lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/.exec(String(url || "")) || [])[1] || "";
@@ -421,7 +472,7 @@
 // }
 
 // export const cloudEnabled = () => Boolean(adminConfig.cloudUrl);
-// export const BUILD = "sticky-v10-optimized";
+// export const BUILD = "sticky-v12-snapshot";
 
 // export async function testCloud() {
 //   const url = adminConfig.cloudUrl;
@@ -447,12 +498,30 @@
 //   return run;
 // }
 
+// /** Baked photos live as files; the cloud stores photo data, so read the file back before saving (never lose a photo). */
+// async function inlineLocalPhoto(image) {
+//   if (typeof image !== "string" || !image.startsWith(IMG_BASE)) return image;
+//   const res = await fetch(image.split("?")[0]);
+//   if (!res.ok) throw new Error("Could not read a saved photo. Please refresh the page and try again.");
+//   const blob = await res.blob();
+//   return new Promise((resolve, reject) => {
+//     const fr = new FileReader();
+//     fr.onload = () => resolve(String(fr.result));
+//     fr.onerror = () => reject(new Error("Could not read a saved photo. Please refresh the page and try again."));
+//     fr.readAsDataURL(blob);
+//   });
+// }
+
 // async function saveToCloudNow(pin) {
-//   const rows = menuItems.map(({ image, categoryId, ...r }) => ({ ...r, image: isPhoto(image) && String(image).length <= 48000 ? image : "" }));
+//   const rows = await Promise.all(menuItems.map(async ({ image, categoryId, ...r }) => {
+//     const img = await inlineLocalPhoto(image);
+//     return { ...r, image: isPhoto(img) && String(img).length <= 48000 ? img : "" };
+//   }));
 //   if (!rows.length) throw new Error("The menu is empty, so nothing was saved.");
 //   // hidden rows that carry the category photos (only for categories that still have dishes)
 //   const liveCats = new Set(menuItems.map((i) => i.categoryId));
-//   for (const [cid, img] of Object.entries(categoryPhotos)) {
+//   for (const [cid, rawImg] of Object.entries(categoryPhotos)) {
+//     const img = await inlineLocalPhoto(rawImg);
 //     if (liveCats.has(cid) && isPhoto(img) && String(img).length <= 48000) {
 //       const cat = menuItems.find((i) => i.categoryId === cid);
 //       rows.push({ id: CAT_ROW + cid, name: "Category photo", category: cat.category, price: 0, veg: true, desc: "", available: false, image: img });
@@ -475,13 +544,17 @@
 // }
 
 // if (typeof window !== "undefined") {
-//   loadFromCloud();
+//   // If the first try fails (bad network), try once more quickly instead of waiting 3 minutes.
+//   const boot = () => loadFromCloud().then((ok) => { if (!ok && !isDirty()) setTimeout(() => loadFromCloud(), 4000); });
+//   if (ready) {
+//     // The menu is already on screen: check the cloud quietly after the page has settled.
+//     if (window.requestIdleCallback) window.requestIdleCallback(boot, { timeout: 4000 });
+//     else setTimeout(boot, 1500);
+//   } else boot();
 //   const refresh = () => { if (document.visibilityState === "visible") loadFromCloud(); };
 //   document.addEventListener("visibilitychange", refresh);
 //   setInterval(refresh, 180000);
 // }
-
-
 
 
 
@@ -504,7 +577,13 @@ import * as siteConfig from "../config/business.js";
 // Safe even if business.js is an older copy without adminConfig (falls back to local-only mode)
 const adminConfig = siteConfig.adminConfig || { cloudUrl: "", localPin: "admin123" };
 
-const KEY = "greenchilly-menu-v2";
+// Full menu baked in at build time by scripts/snapshot-menu.mjs. Optional: the app still works if the file is missing.
+const snapshotFiles = import.meta.glob("../data/menu.snapshot.json", { eager: true, import: "default" });
+const snapshot = Object.values(snapshotFiles)[0] || null;
+
+const KEY = "greenchilly-menu-v3"; // v3: older browsers may hold a stale 44-dish copy under v2, so it is ignored
+const SNAP_KEY = "greenchilly-menu-snap"; // which build snapshot this browser's saved copy belongs to
+const IMG_BASE = "/menu-img/"; // dish photos baked in at build time (see scripts/snapshot-menu.mjs)
 const CAT_PHOTOS_KEY = "greenchilly-category-photos-v1"; // Separate storage for category images
 const COUNT_KEY = "greenchilly-menu-count"; // last known dish count (used by the loader text)
 const DIRTY = "greenchilly-menu-dirty"; // local edits not yet pushed to cloud
@@ -527,6 +606,7 @@ const listeners = new Set();
 /** A photo is accepted only if it is an https URL (cloud/Drive) or an inline image (local-only mode). */
 const validImage = (v) => {
   const s = typeof v === "string" ? v.trim() : "";
+  if (s.startsWith(IMG_BASE) && !s.includes("..")) return s;
   return /^https:\/\//i.test(s) || /^data:image\/(jpeg|png|webp);base64,/i.test(s) ? s : "";
 };
 
@@ -605,15 +685,36 @@ function derive(items) {
 function readLocal() {
   try { return clean(JSON.parse(localStorage.getItem(KEY))); } catch { return null; }
 }
-const savedCopy = readLocal();
-derive(savedCopy || defaultMenu);
+const dirtyNow = () => { try { return localStorage.getItem(DIRTY) === "1"; } catch { return false; } };
+const snapItems = snapshot ? clean(snapshot.items) : null;
+const snapSig = snapshot?.sig ? String(snapshot.sig) : "";
+const snapCats = snapshot?.categoryPhotos && typeof snapshot.categoryPhotos === "object"
+  ? Object.fromEntries(Object.entries(snapshot.categoryPhotos).filter(([k, v]) => k && validImage(v)))
+  : {};
+const getSnapSig = () => { try { return localStorage.getItem(SNAP_KEY) || ""; } catch { return ""; } };
+const setSnapSig = (v) => { try { localStorage.setItem(SNAP_KEY, v); } catch { /* ignore */ } };
+
+let savedCopy = readLocal();
+// A new deploy ships fresher data than an old browser copy, so drop the old copy (unless it has unpublished admin edits).
+if (savedCopy && snapItems && !dirtyNow() && getSnapSig() !== snapSig) savedCopy = null;
+if (!savedCopy && snapItems) {
+  setSnapSig(snapSig);
+  if (!dirtyNow() && snapshot.rev) setRev(snapshot.rev);
+}
+if (snapItems && !Object.keys(categoryPhotos).length) categoryPhotos = snapCats;
+// Never fall back to the small built-in menu when a full snapshot exists.
+derive(savedCopy || snapItems || defaultMenu);
+// true only while the small built-in menu is on screen (no snapshot, no saved copy, cloud not answered yet)
+let usingFallback = !(savedCopy || snapItems);
+export const isFallbackMenu = () => usingFallback;
 
 /* ---------------- "ready" state: stops the 44 -> 269 flash ---------------- */
 // Ready immediately if this browser already has a saved menu, or if there is no cloud to wait for.
 // Otherwise the menu page shows the loader until the cloud answers (or finally gives up).
-let ready = Boolean(savedCopy) || !adminConfig.cloudUrl;
+let ready = Boolean(savedCopy) || Boolean(snapItems) || !adminConfig.cloudUrl;
 
 function commit(items, { persist = true } = {}) {
+  usingFallback = false;
   derive(items);
   version++;
   if (persist) {
@@ -621,6 +722,7 @@ function commit(items, { persist = true } = {}) {
       localStorage.setItem(KEY, JSON.stringify(items.map(({ image, ...rest }) => (image && image !== defaultById[rest.id]?.image ? { ...rest, image } : rest))));
     } catch { /* storage full/blocked */ }
     try { localStorage.setItem(COUNT_KEY, String(items.length)); } catch { /* ignore */ }
+    if (snapSig) setSnapSig(snapSig);
   }
   listeners.forEach((l) => l());
 }
@@ -710,7 +812,8 @@ export function resetToDefaults() {
 
 /* ---------------- auto-publish (admin edits go live for everyone) ---------------- */
 let adminPin = "";
-export const setAdminPin = (p) => { adminPin = p || ""; };
+// Returns the load promise (true = full menu is in) so the admin page can wait for it instead of showing the small default menu.
+export const setAdminPin = (p) => { adminPin = p || ""; return adminPin && !isDirty() ? loadFromCloud({ force: true }) : Promise.resolve(!usingFallback); };
 let pub = { state: "idle", msg: "" };
 export const publishState = () => pub;
 const setPub = (state, msg) => { pub = { state, msg }; version++; listeners.forEach((l) => l()); };
@@ -751,7 +854,7 @@ async function loadBitmap(file) {
 }
 
 const PHOTO_LIMIT = 44000;
-export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/.test(String(v || ""));
+export const isPhoto = (v) => /^https:\/\//i.test(String(v || "")) || /^data:image\/jpeg;base64,/.test(String(v || "")) || String(v || "").startsWith(IMG_BASE);
 
 async function compressToFit(file) {
   const bmp = await loadBitmap(file);
@@ -872,6 +975,8 @@ export async function loadFromCloud({ force = false } = {}) {
     }
     if (!data) return false;
     if (!force && isDirty()) return false;
+    // Same version as this copy: nothing to compare, nothing to re-render, nothing to save.
+    if (!force && data.rev && String(data.rev) === getRev()) return true;
     const items = clean(data.items);
     if (!items) return false;
     setRev(data.rev || "");
@@ -933,7 +1038,7 @@ async function post(body) {
 }
 
 export const cloudEnabled = () => Boolean(adminConfig.cloudUrl);
-export const BUILD = "sticky-v11-loader";
+export const BUILD = "sticky-v12-snapshot";
 
 export async function testCloud() {
   const url = adminConfig.cloudUrl;
@@ -959,12 +1064,30 @@ export function saveToCloud(pin) {
   return run;
 }
 
+/** Baked photos live as files; the cloud stores photo data, so read the file back before saving (never lose a photo). */
+async function inlineLocalPhoto(image) {
+  if (typeof image !== "string" || !image.startsWith(IMG_BASE)) return image;
+  const res = await fetch(image.split("?")[0]);
+  if (!res.ok) throw new Error("Could not read a saved photo. Please refresh the page and try again.");
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error("Could not read a saved photo. Please refresh the page and try again."));
+    fr.readAsDataURL(blob);
+  });
+}
+
 async function saveToCloudNow(pin) {
-  const rows = menuItems.map(({ image, categoryId, ...r }) => ({ ...r, image: isPhoto(image) && String(image).length <= 48000 ? image : "" }));
+  const rows = await Promise.all(menuItems.map(async ({ image, categoryId, ...r }) => {
+    const img = await inlineLocalPhoto(image);
+    return { ...r, image: isPhoto(img) && String(img).length <= 48000 ? img : "" };
+  }));
   if (!rows.length) throw new Error("The menu is empty, so nothing was saved.");
   // hidden rows that carry the category photos (only for categories that still have dishes)
   const liveCats = new Set(menuItems.map((i) => i.categoryId));
-  for (const [cid, img] of Object.entries(categoryPhotos)) {
+  for (const [cid, rawImg] of Object.entries(categoryPhotos)) {
+    const img = await inlineLocalPhoto(rawImg);
     if (liveCats.has(cid) && isPhoto(img) && String(img).length <= 48000) {
       const cat = menuItems.find((i) => i.categoryId === cid);
       rows.push({ id: CAT_ROW + cid, name: "Category photo", category: cat.category, price: 0, veg: true, desc: "", available: false, image: img });
@@ -988,7 +1111,12 @@ async function saveToCloudNow(pin) {
 
 if (typeof window !== "undefined") {
   // If the first try fails (bad network), try once more quickly instead of waiting 3 minutes.
-  loadFromCloud().then((ok) => { if (!ok && !isDirty()) setTimeout(() => loadFromCloud(), 4000); });
+  const boot = () => loadFromCloud().then((ok) => { if (!ok && !isDirty()) setTimeout(() => loadFromCloud(), 4000); });
+  if (ready) {
+    // The menu is already on screen: check the cloud quietly after the page has settled.
+    if (window.requestIdleCallback) window.requestIdleCallback(boot, { timeout: 4000 });
+    else setTimeout(boot, 1500);
+  } else boot();
   const refresh = () => { if (document.visibilityState === "visible") loadFromCloud(); };
   document.addEventListener("visibilitychange", refresh);
   setInterval(refresh, 180000);

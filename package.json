@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:whatsapp": "node --import ./scripts/register.mjs scripts/test-whatsapp.mjs"
+    "test:whatsapp": "node --import ./scripts/register.mjs scripts/test-whatsapp.mjs",
+    "prebuild": "node scripts/snapshot-menu.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
