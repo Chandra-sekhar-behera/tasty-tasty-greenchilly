@@ -166,6 +166,35 @@ function RotatingBadge() {
   );
 }
 
+/* Typewriter (loops): pure CSS. Only clip-path + transform animate; the text keeps its final size from the first frame, so nothing shifts. */
+const TW_BASE = `
+.tw{position:relative;display:inline-block;max-width:100%}
+.tw-text{display:inline-block;clip-path:inset(-.25em 100% -.25em 0)}
+.tw-caret{position:absolute;inset:0;pointer-events:none;transform:translate3d(-100%,0,0)}
+.tw-caret::after{content:"";position:absolute;right:-.04em;top:.14em;bottom:.14em;width:.055em;border-radius:1px;background:#8bcb35;opacity:0}
+@media (prefers-reduced-motion:reduce){.tw-text,.tw-caret,.tw-caret::after{animation:none!important}.tw-text{clip-path:none!important}.tw-caret{display:none}}
+`;
+const TW_CYCLE = 8.4;   // seconds for one full loop: type both lines, hold, erase letter by letter, short pause
+
+/** Types letter by letter, holds, then backspaces letter by letter (last line first), then repeats. chars = letters (step count). */
+function Typed({ children, chars, start = 0, dur = 1, erase, eraseDur = 1, id }) {
+  const C = TW_CYCLE;
+  const p = (t) => ((t / C) * 100).toFixed(3);
+  const CLOSED = "inset(-.25em 100% -.25em 0)", OPEN = "inset(-.25em -.35em -.25em -.1em)";
+  const type = start + dur, eraseEnd = erase + eraseDur;
+  const css = `
+@keyframes ${id}c{0%{clip-path:${CLOSED}}${p(start)}%{clip-path:${CLOSED};animation-timing-function:steps(${chars},end)}${p(type)}%{clip-path:${OPEN};animation-timing-function:linear}${p(erase)}%{clip-path:${OPEN};animation-timing-function:steps(${chars},end)}${p(eraseEnd)}%{clip-path:${CLOSED}}100%{clip-path:${CLOSED}}}
+@keyframes ${id}m{0%{transform:translate3d(-100%,0,0)}${p(start)}%{transform:translate3d(-100%,0,0);animation-timing-function:steps(${chars},end)}${p(type)}%{transform:translate3d(0,0,0);animation-timing-function:linear}${p(erase)}%{transform:translate3d(0,0,0);animation-timing-function:steps(${chars},end)}${p(eraseEnd)}%{transform:translate3d(-100%,0,0)}100%{transform:translate3d(-100%,0,0)}}
+@keyframes ${id}o{0%,${p(start)}%{opacity:0}${(start / C * 100 + 0.01).toFixed(3)}%{opacity:1}${p(type + 0.15)}%{opacity:1}${p(type + 0.45)}%{opacity:0}${(erase / C * 100 - 0.01).toFixed(3)}%{opacity:0}${p(erase)}%{opacity:1}${p(eraseEnd)}%{opacity:1}${p(eraseEnd + 0.3)}%{opacity:0}100%{opacity:0}}`;
+  return (
+    <span className="tw" style={{ "--ko": `${id}o`, "--C": `${C}s` }}>
+      <style>{css}{`.tw-caret::after{animation:var(--ko) var(--C) linear infinite}`}</style>
+      <span className="tw-text" style={{ animation: `${id}c ${C}s linear infinite` }}>{children}</span>
+      <span className="tw-caret" aria-hidden="true" style={{ animation: `${id}m ${C}s linear infinite` }} />
+    </span>
+  );
+}
+
 function Hero() {
   const ref = useRef(null);
   const reduce = useReducedMotion();
@@ -191,13 +220,14 @@ function Hero() {
           </Slide>
 
           <h1 id="hero-title" className="mt-5 font-serif text-[2.6rem] font-semibold leading-[0.95] sm:mt-6 sm:text-6xl lg:text-[6rem]">
-            <span className="block overflow-hidden pb-1">
-              <Slide from="left" distance={60} duration={1.1} delay={0.1} as="span" className="block">Bold Flavours.</Slide>
+            <style>{TW_BASE}</style>
+            <span className="block pb-1">
+              <Typed id="twa" chars={14} start={0.3} dur={1.2} erase={6.1} eraseDur={0.9}>Bold Flavours.</Typed>
             </span>
-            <span className="block overflow-hidden pb-2">
-              <Slide from="right" distance={60} duration={1.2} delay={0.2} as="span" className="block">
+            <span className="block pb-2">
+              <Typed id="twb" chars={15} start={1.8} dur={1.3} erase={5.1} eraseDur={0.9}>
                 <em className="text-lime-gradient pr-2 font-medium italic">Freshly Served.</em>
-              </Slide>
+              </Typed>
             </span>
           </h1>
 
